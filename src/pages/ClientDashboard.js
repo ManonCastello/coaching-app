@@ -72,7 +72,24 @@ export default function ClientDashboard() {
   function handleToggle() { switchMode(); navigate('/coach'); }
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
-  if (!profile) return null;
+
+  if (!profile) return (
+    <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
+      <div style={{ fontSize: 64, marginBottom: 20 }}>🌿</div>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Pas encore de profil élève</h2>
+      <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 32, lineHeight: 1.6 }}>
+        Pour accéder à ton espace élève et suivre ton programme, crée d'abord ton profil.
+      </p>
+      <Link to="/register" style={{ textDecoration: 'none' }}>
+        <button className="btn btn-primary">Créer mon profil élève</button>
+      </Link>
+      {userRole === 'coach' && (
+        <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={handleToggle}>
+          ← Retour espace coach
+        </button>
+      )}
+    </div>
+  );
 
   const { targets } = profile;
   const todayCalories = todayEntry?.calories || 0;

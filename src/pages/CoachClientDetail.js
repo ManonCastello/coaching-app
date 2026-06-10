@@ -7,6 +7,7 @@ import { format, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES } from '../utils/calculations';
+import PhotoViewer from '../components/PhotoViewer';
 
 export default function CoachClientDetail() {
   const { clientId } = useParams();
@@ -21,6 +22,7 @@ export default function CoachClientDetail() {
   const [targets, setTargets] = useState({});
   const [activeTab, setActiveTab] = useState('overview');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [photoViewer, setPhotoViewer] = useState(null); // { photoURLs, slot }
   const [editInfo, setEditInfo] = useState(false);
   const [infoForm, setInfoForm] = useState({});
   function setI(key, val) { setInfoForm(p => ({ ...p, [key]: val })); }
@@ -435,7 +437,7 @@ export default function CoachClientDetail() {
                 {w.photoURLs && Object.values(w.photoURLs).some(u => u) && (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                     {[{key:'face'},{key:'profile'},{key:'back'}].map(slot =>
-                      w.photoURLs[slot.key] ? <img key={slot.key} src={w.photoURLs[slot.key]} alt={slot.key} style={{ width: '30%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 6 }} /> : null
+                      w.photoURLs[slot.key] ? <img key={slot.key} src={w.photoURLs[slot.key]} alt={slot.key} onClick={() => setPhotoViewer({ photoURLs: w.photoURLs, slot: slot.key })} style={{ width: '30%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 6, cursor: 'zoom-in' }} /> : null
                     )}
                   </div>
                 )}
@@ -506,6 +508,13 @@ export default function CoachClientDetail() {
           </div>
         )}
       </div>
+    {photoViewer && (
+      <PhotoViewer
+        photoURLs={photoViewer.photoURLs}
+        initialSlot={photoViewer.slot}
+        onClose={() => setPhotoViewer(null)}
+      />
+    )}
     </div>
   );
 }

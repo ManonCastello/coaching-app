@@ -8,6 +8,7 @@ import { format, startOfWeek, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, Cell } from 'recharts';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
+import PhotoViewer from '../components/PhotoViewer';
 
 const CLOUDINARY_CLOUD = 'dduaqnygn';
 const CLOUDINARY_PRESET = 'fitlog_photos';
@@ -34,6 +35,7 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [weekStats, setWeekStats] = useState(null);
   const [saved, setSaved] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState(null);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const [profile, setProfile] = useState(null);
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
@@ -364,6 +366,13 @@ export default function WeeklyCheckIn({ coachMode }) {
       </div>
 
 {!coachMode && <TabBar />}
+    {photoViewer && (
+      <PhotoViewer
+        photoURLs={photoViewer.photoURLs}
+        initialSlot={photoViewer.slot}
+        onClose={() => setPhotoViewer(null)}
+      />
+    )}
     </div>
   );
 }

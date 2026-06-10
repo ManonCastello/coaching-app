@@ -8,6 +8,7 @@ import { format, getDay, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 import TabBar from '../components/TabBar';
+import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
 
 export default function ClientDashboard() {
@@ -51,17 +52,17 @@ export default function ClientDashboard() {
     const resetDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey));
     const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
 
-    const t = p.targets || {};
     let totalDiff = 0;
-    entries.forEach(e => {
+    for (const e of entries) {
       if (e.date >= weekKey && e.calories) {
+        const t = await getTargetsForDate(currentUser.uid, e.date, p.targets || {});
         const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
         const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
         const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
         const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
         totalDiff += (e.calories - target);
       }
-    });
+    }
     setWeekBalance(Math.round(totalDiff + resetOffset));
 
     setLoading(false);

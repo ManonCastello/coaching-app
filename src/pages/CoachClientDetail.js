@@ -46,23 +46,31 @@ export default function CoachClientDetail() {
   async function saveTargets() {
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'clients', clientId), {
-        targets: {
-          calories: +targets.calories || 0,
-          protein: +targets.protein || 0,
-          fat: +targets.fat || 0,
-          carbs: +targets.carbs || 0,
-          steps: +targets.steps || 10000,
-          sleep: +targets.sleep || 8,
-          sessionsPerWeek: +targets.sessionsPerWeek || 3,
-          kcalPer1000Steps: +targets.kcalPer1000Steps || 20,
-          sessionCalorieDeficit: +targets.sessionCalorieDeficit || 300,
-        }
+      const today = new Date().toISOString().split('T')[0];
+      const newTargets = {
+        calories: +targets.calories || 0,
+        protein: +targets.protein || 0,
+        fat: +targets.fat || 0,
+        carbs: +targets.carbs || 0,
+        steps: +targets.steps || 10000,
+        sleep: +targets.sleep || 8,
+        sessionsPerWeek: +targets.sessionsPerWeek || 3,
+        kcalPer1000Steps: +targets.kcalPer1000Steps || 20,
+        sessionCalorieDeficit: +targets.sessionCalorieDeficit || 300,
+      };
+      // Save current targets
+      await updateDoc(doc(db, 'clients', clientId), { targets: newTargets });
+      // Save to history with today as validFrom
+      const { setDoc, serverTimestamp } = await import('firebase/firestore');
+      await setDoc(doc(db, 'clients', clientId, 'targetsHistory', today), {
+        ...newTargets,
+        validFrom: today,
+        updatedAt: serverTimestamp(),
       });
-      setClient(p => ({ ...p, targets }));
+      setClient(p => ({ ...p, targets: newTargets }));
       setEditTargets(false); setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    } catch(e) { console.error(e); }
     setSaving(false);
   }
 

@@ -7,6 +7,7 @@ import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, server
 import { format, subDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
+import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
 
 export default function DailyCheckIn({ coachMode }) {
@@ -40,7 +41,12 @@ export default function DailyCheckIn({ coachMode }) {
   useEffect(() => {
     async function load() {
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
-      if (profileDoc.exists()) setProfile(profileDoc.data());
+      if (profileDoc.exists()) {
+        const p = profileDoc.data();
+        // Use targets valid for the selected date
+        const historicalTargets = await getTargetsForDate(currentUser.uid, targetDate, p.targets || {});
+        setProfile({ ...p, targets: historicalTargets });
+      }
 
       const entryDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate));
       if (entryDoc.exists()) {

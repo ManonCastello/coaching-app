@@ -76,7 +76,7 @@ export default function ClientDashboard() {
 
   if (!profile) return (
     <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
-      <div style={{ fontSize: 64, marginBottom: 20 }}>🌿</div>
+      <div style={{ fontSize: 64, marginBottom: 20 }}>⚜️</div>
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Pas encore de profil élève</h2>
       <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 32, lineHeight: 1.6 }}>
         Pour accéder à ton espace élève et suivre ton programme, crée d'abord ton profil.

@@ -58,7 +58,7 @@ export default function CoachDashboard() {
   return (
     <div className="app-shell">
       <div className="top-nav">
-        <div className="top-nav-logo">🌿 FitLog</div>
+        <div className="top-nav-logo">⚜️ FitLog</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <CoachToggle mode={coachMode} onSwitch={handleToggle} />
           <button className="btn btn-ghost btn-sm" style={{ width: 'auto', fontSize: 12, padding: '8px' }} onClick={async () => { await logout(); navigate('/login'); }}>

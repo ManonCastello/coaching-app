@@ -3,35 +3,73 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { doc, getDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { format, subDays } from 'date-fns';
+import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { format, getDay, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
+import TabBar from '../components/TabBar';
+import CoachToggle from '../components/CoachToggle';
 
 export default function ClientDashboard() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, userRole, coachMode, switchMode } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [todayEntry, setTodayEntry] = useState(null);
   const [recentEntries, setRecentEntries] = useState([]);
+  const [weeklyToday, setWeeklyToday] = useState(false);
+  const [weekBalance, setWeekBalance] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayLabel = format(new Date(), "EEEE d MMMM yyyy", { locale: fr });
+  const todayDayOfWeek = getDay(new Date());
+  const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-  useEffect(() => {
-    async function load() {
-      const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
-      if (profileDoc.exists()) setProfile(profileDoc.data());
-      const todayDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today));
-      if (todayDoc.exists()) setTodayEntry(todayDoc.data());
-      const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
-      const snap = await getDocs(q);
-      setRecentEntries(snap.docs.map(d => d.data()).reverse());
-      setLoading(false);
+  async function loadData() {
+    const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+    if (!profileDoc.exists()) { setLoading(false); return; }
+    const p = profileDoc.data();
+    setProfile(p);
+
+    // Check if today is bilan day and not done yet
+    if (p.weeklyBilanDay !== undefined && p.weeklyBilanDay === todayDayOfWeek) {
+      const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey));
+      setWeeklyToday(!weekDoc.exists());
     }
-    load();
-  }, [currentUser.uid, today]);
+
+    // Today entry
+    const todayDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today));
+    if (todayDoc.exists()) setTodayEntry(todayDoc.data());
+
+    // Last 7 days for sparkline
+    const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
+    const snap = await getDocs(q);
+    const entries = snap.docs.map(d => d.data());
+    setRecentEntries([...entries].reverse());
+
+    // Week balance — check for manual reset first
+    const resetDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey));
+    const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
+
+    const t = p.targets || {};
+    let totalDiff = 0;
+    entries.forEach(e => {
+      if (e.date >= weekKey && e.calories) {
+        const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
+        const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+        const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
+        const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+        totalDiff += (e.calories - target);
+      }
+    });
+    setWeekBalance(Math.round(totalDiff + resetOffset));
+
+    setLoading(false);
+  }
+
+  useEffect(() => { loadData(); }, [currentUser.uid, today]);
+
+  function handleToggle() { switchMode(); navigate('/coach'); }
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
   if (!profile) return null;
@@ -40,13 +78,17 @@ export default function ClientDashboard() {
   const todayCalories = todayEntry?.calories || 0;
   const todaySteps = todayEntry?.steps || 0;
   const todayWeight = todayEntry?.weight || null;
-
   const stepBonus = Math.round(((todaySteps - (targets?.steps || 10000)) / 1000) * (targets?.kcalPer1000Steps || 20));
   const sessionAdj = todayEntry?.didProgramSession === false ? -(targets?.sessionCalorieDeficit || 300) : 0;
   const extraCal = todayEntry?.extraActivityCal || 0;
   const adjustedCalories = (targets?.calories || 2000) + stepBonus + sessionAdj + extraCal;
   const caloriePct = Math.min(100, Math.round((todayCalories / adjustedCalories) * 100));
   const stepPct = Math.min(100, Math.round((todaySteps / (targets?.steps || 10000)) * 100));
+
+  const balanceColor = weekBalance === null ? 'var(--text-muted)'
+    : weekBalance > 200 ? 'var(--warning)'
+    : weekBalance < -200 ? 'var(--danger)'
+    : 'var(--success)';
 
   return (
     <div className="app-shell">
@@ -55,29 +97,39 @@ export default function ClientDashboard() {
           <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{todayLabel}</div>
           <div className="top-nav-title">Bonjour, {profile.firstName} 👋</div>
         </div>
-        <Link to="/profile" style={{ textDecoration: 'none' }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--primary), var(--accent))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontWeight: 700, fontSize: 14
-          }}>
-            {profile.firstName[0]}{profile.lastName[0]}
-          </div>
-        </Link>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {userRole === 'coach' && <CoachToggle mode={coachMode} onSwitch={handleToggle} />}
+          <Link to="/profile" style={{ textDecoration: 'none' }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 13 }}>
+              {profile.firstName[0]}{profile.lastName[0]}
+            </div>
+          </Link>
+        </div>
       </div>
 
       <div className="page">
-        {/* Check-in CTA */}
+        {/* Bilan hebdo banner */}
+        {weeklyToday && (
+          <div style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', borderRadius: 'var(--radius)', padding: '20px', marginBottom: 16, color: 'white', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <p style={{ fontSize: 13, opacity: 0.9, marginBottom: 6 }}>📅 C'est le jour de ton bilan !</p>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Bilan hebdomadaire</h3>
+              <Link to="/checkin/weekly" style={{ textDecoration: 'none' }}>
+                <button style={{ background: 'white', color: '#D97706', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>
+                  Faire mon bilan →
+                </button>
+              </Link>
+            </div>
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }} />
+          </div>
+        )}
+
+        {/* Daily check-in CTA */}
         {!todayEntry && (
-          <div style={{
-            background: 'linear-gradient(135deg, var(--primary), var(--accent))',
-            borderRadius: 'var(--radius)', padding: '20px', marginBottom: 20,
-            color: 'white', position: 'relative', overflow: 'hidden'
-          }}>
+          <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderRadius: 'var(--radius)', padding: '20px', marginBottom: 16, color: 'white', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'relative', zIndex: 1 }}>
               <p style={{ fontSize: 13, opacity: 0.85, marginBottom: 6 }}>📋 Pas encore rempli aujourd'hui</p>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Fais ton suivi quotidien</h3>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Suivi quotidien</h3>
               <Link to="/checkin/daily" style={{ textDecoration: 'none' }}>
                 <button style={{ background: 'white', color: 'var(--primary)', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>
                   Remplir maintenant →
@@ -91,34 +143,33 @@ export default function ClientDashboard() {
         {/* Today stats */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <h2 className="section-title" style={{ margin: 0 }}>Aujourd'hui</h2>
-          {todayEntry && (
-            <Link to="/checkin/daily" style={{ textDecoration: 'none', fontSize: 13, color: 'var(--primary)', fontWeight: 600 }}>Modifier ✏️</Link>
-          )}
+          {todayEntry && <Link to="/checkin/daily" style={{ textDecoration: 'none', fontSize: 13, color: 'var(--primary)', fontWeight: 600 }}>Modifier ✏️</Link>}
         </div>
 
         <div className="stat-grid" style={{ marginBottom: 20 }}>
           <div className="stat-card">
             <div className="stat-label">Calories</div>
             <div className="stat-value">{todayCalories.toLocaleString()}<span className="stat-unit">/ {adjustedCalories.toLocaleString()}</span></div>
-            <div className="progress-bar" style={{ marginTop: 8 }}>
-              <div className="progress-fill" style={{ width: `${caloriePct}%` }} />
-            </div>
+            <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${caloriePct}%` }} /></div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Pas</div>
             <div className="stat-value">{todaySteps.toLocaleString()}<span className="stat-unit">/ {(targets?.steps || 10000).toLocaleString()}</span></div>
-            <div className="progress-bar" style={{ marginTop: 8 }}>
-              <div className="progress-fill" style={{ width: `${stepPct}%` }} />
-            </div>
+            <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${stepPct}%` }} /></div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Poids du jour</div>
             <div className="stat-value" style={{ color: 'var(--primary)' }}>{todayWeight || '—'}<span className="stat-unit">kg</span></div>
           </div>
-          <div className="stat-card">
-            <div className="stat-label">Ajustement pas</div>
-            <div className="stat-value" style={{ color: stepBonus >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-              {stepBonus >= 0 ? '+' : ''}{stepBonus}<span className="stat-unit">kcal</span>
+          {/* Week balance */}
+          <div className="stat-card" style={{ border: `1.5px solid ${balanceColor}20` }}>
+            <div className="stat-label">Balance semaine</div>
+            <div className="stat-value" style={{ color: balanceColor, fontSize: 20 }}>
+              {weekBalance !== null ? `${weekBalance > 0 ? '+' : ''}${weekBalance}` : '—'}
+              <span className="stat-unit">kcal</span>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
+              {weekBalance === null ? '' : weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
             </div>
           </div>
         </div>
@@ -128,10 +179,10 @@ export default function ClientDashboard() {
           <>
             <h2 className="section-title">Évolution du poids</h2>
             <div className="card" style={{ marginBottom: 20, padding: '16px 16px 8px' }}>
-              <ResponsiveContainer width="100%" height={120}>
+              <ResponsiveContainer width="100%" height={100}>
                 <LineChart data={recentEntries.filter(e => e.weight)}>
-                  <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2.5} dot={{ fill: 'var(--primary)', r: 4 }} />
-                  <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 }} formatter={v => [`${v} kg`, 'Poids']} labelFormatter={l => format(new Date(l), 'dd/MM', { locale: fr })} />
+                  <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2.5} dot={{ fill: 'var(--primary)', r: 3 }} />
+                  <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={v => [`${v} kg`]} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -148,7 +199,6 @@ export default function ClientDashboard() {
             { icon: '🥑', label: 'Lipides', value: `${targets?.fat || '—'} g`, color: '#F59E0B' },
             { icon: '👟', label: 'Pas / jour', value: (targets?.steps || 10000).toLocaleString(), color: 'var(--success)' },
             { icon: '🏋️', label: 'Séances / semaine', value: targets?.sessionsPerWeek || 3, color: 'var(--primary)' },
-            { icon: '😴', label: 'Sommeil', value: `${targets?.sleep || 8} h`, color: '#60A5FA' },
           ].map(t => (
             <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
               <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t.icon} {t.label}</span>
@@ -162,12 +212,7 @@ export default function ClientDashboard() {
         </button>
       </div>
 
-      <nav className="tab-bar">
-        <Link to="/dashboard" className="tab-item active"><span style={{ fontSize: 20 }}>🏠</span><span>Accueil</span></Link>
-        <Link to="/checkin/daily" className="tab-item"><span style={{ fontSize: 20 }}>📋</span><span>Suivi</span></Link>
-        <Link to="/progress" className="tab-item"><span style={{ fontSize: 20 }}>📈</span><span>Progrès</span></Link>
-        <Link to="/profile" className="tab-item"><span style={{ fontSize: 20 }}>👤</span><span>Profil</span></Link>
-      </nav>
+      <TabBar />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { format, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import TabBar from '../components/TabBar';
 
 const CLOUDINARY_CLOUD = 'dduaqnygn';
 const CLOUDINARY_PRESET = 'fitlog_photos';
@@ -285,14 +286,7 @@ export default function WeeklyCheckIn({ coachMode }) {
         </button>
       </div>
 
-      {!coachMode && (
-        <nav className="tab-bar">
-          <Link to="/dashboard" className="tab-item"><span style={{ fontSize: 20 }}>🏠</span><span>Accueil</span></Link>
-          <Link to="/checkin/daily" className="tab-item"><span style={{ fontSize: 20 }}>📋</span><span>Suivi</span></Link>
-          <Link to="/progress" className="tab-item"><span style={{ fontSize: 20 }}>📈</span><span>Progrès</span></Link>
-          <Link to="/profile" className="tab-item active"><span style={{ fontSize: 20 }}>👤</span><span>Profil</span></Link>
-        </nav>
-      )}
+{!coachMode && <TabBar />}
     </div>
   );
 }

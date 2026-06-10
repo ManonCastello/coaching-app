@@ -19,6 +19,7 @@ function FleurDeLys({ size = 40, color = 'white' }) {
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -47,12 +48,8 @@ export default function LoginPage() {
         }}>
           <FleurDeLys size={44} color="white" />
         </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>
-          FitLog
-        </h1>
-        <p style={{ color: 'var(--primary)', fontSize: 13, marginTop: 2, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          by Manon Castello
-        </p>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>FitLog</h1>
+        <p style={{ color: 'var(--primary)', fontSize: 13, marginTop: 2, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>by Manon Castello</p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -64,7 +61,27 @@ export default function LoginPage() {
         </div>
         <div className="input-group">
           <label className="input-label">Mot de passe</label>
-          <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required />
+          <div style={{ position: 'relative' }}>
+            <input
+              className="input"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              style={{ paddingRight: 48 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(s => !s)}
+              style={{
+                position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
+                color: 'var(--text-muted)', padding: 0
+              }}>
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
         <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 8 }}>
           {loading ? 'Connexion...' : 'Se connecter'}

@@ -1,6 +1,6 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 import LoginPage from './pages/LoginPage';
@@ -23,25 +23,35 @@ function PrivateRoute({ children, requireCoach }) {
 }
 
 function AppRoutes() {
-  const { currentUser, userRole } = useAuth();
+  const { currentUser, userRole, coachMode } = useAuth();
+
+  // Coach in athlete mode uses client pages
+  const isCoachAsAthlete = userRole === 'coach' && coachMode === 'athlete';
+
   return (
     <Routes>
       <Route path="/login" element={
-        currentUser ? <Navigate to={userRole === 'coach' ? '/coach' : '/dashboard'} /> : <LoginPage />
+        currentUser
+          ? <Navigate to={userRole === 'coach' ? '/coach' : '/dashboard'} />
+          : <LoginPage />
       } />
       <Route path="/register" element={<RegisterPage />} />
+
+      {/* Client / Coach-as-athlete routes */}
       <Route path="/dashboard" element={<PrivateRoute><ClientDashboard /></PrivateRoute>} />
       <Route path="/checkin/daily" element={<PrivateRoute><DailyCheckIn /></PrivateRoute>} />
       <Route path="/checkin/weekly" element={<PrivateRoute><WeeklyCheckIn /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><ClientProfile /></PrivateRoute>} />
       <Route path="/progress" element={<PrivateRoute><ProgressPage /></PrivateRoute>} />
+
+      {/* Coach-only routes */}
       <Route path="/coach" element={<PrivateRoute requireCoach><CoachDashboard /></PrivateRoute>} />
       <Route path="/coach/client/:clientId" element={<PrivateRoute requireCoach><CoachClientDetail /></PrivateRoute>} />
-      <Route path="/coach/my-checkin" element={<PrivateRoute requireCoach><DailyCheckIn coachMode /></PrivateRoute>} />
-      <Route path="/coach/my-weekly" element={<PrivateRoute requireCoach><WeeklyCheckIn coachMode /></PrivateRoute>} />
-      <Route path="/coach/my-progress" element={<PrivateRoute requireCoach><ProgressPage coachMode /></PrivateRoute>} />
+
       <Route path="*" element={
-        currentUser ? <Navigate to={userRole === 'coach' ? '/coach' : '/dashboard'} /> : <Navigate to="/login" />
+        currentUser
+          ? <Navigate to={userRole === 'coach' && coachMode === 'coach' ? '/coach' : '/dashboard'} />
+          : <Navigate to="/login" />
       } />
     </Routes>
   );

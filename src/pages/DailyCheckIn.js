@@ -6,6 +6,9 @@ import { db } from '../firebase';
 import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, serverTimestamp } from 'firebase/firestore';
 import { format, subDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import TabBar from '../components/TabBar';
+import CoachToggle from '../components/CoachToggle';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function DailyCheckIn({ coachMode }) {
   const { currentUser } = useAuth();
@@ -303,14 +306,8 @@ export default function DailyCheckIn({ coachMode }) {
         </button>
       </div>
 
-      {!coachMode && (
-        <nav className="tab-bar">
-          <Link to="/dashboard" className="tab-item"><span style={{ fontSize: 20 }}>🏠</span><span>Accueil</span></Link>
-          <Link to="/checkin/daily" className="tab-item active"><span style={{ fontSize: 20 }}>📋</span><span>Suivi</span></Link>
-          <Link to="/progress" className="tab-item"><span style={{ fontSize: 20 }}>📈</span><span>Progrès</span></Link>
-          <Link to="/profile" className="tab-item"><span style={{ fontSize: 20 }}>👤</span><span>Profil</span></Link>
-        </nav>
-      )}
+{!coachMode && <TabBar />}
     </div>
   );
 }
+// TabBar already imported via module

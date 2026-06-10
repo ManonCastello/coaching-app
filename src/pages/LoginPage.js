@@ -28,12 +28,17 @@ export default function LoginPage() {
 
   return (
     <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '40px 24px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <img
-          src="/logo-manon.svg"
-          alt="Manon Castello Nutrition"
-          style={{ width: 200, height: 200, objectFit: 'contain', margin: '0 auto', display: 'block' }}
-        />
+      <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: '50%',
+          background: 'linear-gradient(135deg, #1E0D3C, #4A1E8A)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px', boxShadow: '0 8px 24px rgba(30,13,60,0.45)'
+        }}>
+          <span style={{ fontSize: 36, lineHeight: 1 }}>⚜️</span>
+        </div>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>FitLog</h1>
+        <p style={{ color: 'var(--primary)', fontSize: 13, marginTop: 2, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>by Manon Castello</p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

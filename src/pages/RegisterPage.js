@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { calculateBMR, calculateTDEE, calculateCalorieTarget, calculateMacros, ACTIVITY_LEVELS, GOALS } from '../utils/calculations';
+import { calculateBMR, calculateTDEE, calculateCalorieTarget, calculateMacros, calculateAgeFromDOB, ACTIVITY_LEVELS, GOALS, WEEK_DAYS } from '../utils/calculations';
 
 const STEPS = ['Compte', 'Identité', 'Mesures', 'Objectifs', 'Résumé'];
 
@@ -17,18 +17,16 @@ export default function RegisterPage() {
   const [form, setForm] = useState({
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', sex: 'F',
-    age: '', profession: '',
+    dob: '', profession: '',
     weight: '', height: '',
     activityLevel: 'actif',
     goal: 'seche',
-    stepGoal: 10000, sleepGoal: 8,
+    stepGoal: 10000, sleepGoal: 8, sessionsPerWeek: 3,
     reminderHour: '20', reminderMinute: '00',
+    weeklyBilanDay: 1,
   });
 
-  function set(key, value) {
-    setForm(prev => ({ ...prev, [key]: value }));
-  }
-
+  function set(key, value) { setForm(prev => ({ ...prev, [key]: value })); }
   function nextStep() { setError(''); setStep(s => s + 1); }
   function prevStep() { setStep(s => s - 1); }
 
@@ -39,12 +37,10 @@ export default function RegisterPage() {
       if (form.password !== form.confirmPassword) return 'Les mots de passe ne correspondent pas';
     }
     if (step === 1) {
-      if (!form.firstName || !form.lastName || !form.age) return 'Tous les champs sont requis';
+      if (!form.firstName || !form.lastName || !form.dob) return 'Tous les champs sont requis';
     }
     if (step === 2) {
       if (!form.weight || !form.height) return 'Poids et taille sont requis';
-      if (form.weight < 30 || form.weight > 250) return 'Poids invalide';
-      if (form.height < 100 || form.height > 250) return 'Taille invalide';
     }
     return null;
   }
@@ -56,7 +52,8 @@ export default function RegisterPage() {
   }
 
   function getCalcs() {
-    const bmr = calculateBMR({ weight: +form.weight, height: +form.height, age: +form.age, sex: form.sex });
+    const age = calculateAgeFromDOB(form.dob);
+    const bmr = calculateBMR({ weight: +form.weight, height: +form.height, age, sex: form.sex });
     const tdee = calculateTDEE({ bmr, activityLevel: form.activityLevel });
     const calorieTarget = calculateCalorieTarget({ tdee, goal: form.goal });
     const macros = calculateMacros({ weight: +form.weight, calorieTarget, goal: form.goal });
@@ -69,34 +66,25 @@ export default function RegisterPage() {
       const { bmr, tdee, calorieTarget, macros } = getCalcs();
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const uid = cred.user.uid;
-
       await setDoc(doc(db, 'clients', uid), {
-        uid,
-        email: form.email,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        sex: form.sex,
-        age: +form.age,
-        profession: form.profession,
-        weight: +form.weight,
-        height: +form.height,
-        activityLevel: form.activityLevel,
-        goal: form.goal,
+        uid, email: form.email,
+        firstName: form.firstName, lastName: form.lastName,
+        sex: form.sex, dob: form.dob, profession: form.profession,
+        weight: +form.weight, height: +form.height,
+        activityLevel: form.activityLevel, goal: form.goal,
         bmr, tdee,
-        // Coach sets these, but default values to start
         targets: {
           calories: calorieTarget,
-          protein: macros.protein,
-          fat: macros.fat,
-          carbs: macros.carbs,
-          steps: +form.stepGoal,
-          sleep: +form.sleepGoal,
-          kcalPer1000Steps: 80,
+          protein: macros.protein, fat: macros.fat, carbs: macros.carbs,
+          steps: +form.stepGoal, sleep: +form.sleepGoal,
+          sessionsPerWeek: +form.sessionsPerWeek,
+          kcalPer1000Steps: 20,
+          sessionCalorieDeficit: 300,
         },
         reminderTime: `${form.reminderHour}:${form.reminderMinute}`,
+        weeklyBilanDay: +form.weeklyBilanDay,
         createdAt: serverTimestamp(),
       });
-
       navigate('/dashboard');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') setError('Cet email est déjà utilisé');
@@ -109,29 +97,22 @@ export default function RegisterPage() {
 
   return (
     <div className="app-shell" style={{ minHeight: '100vh', padding: '32px 24px' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
         {step > 0 && (
           <button onClick={prevStep} className="btn btn-ghost btn-sm" style={{ width: 'auto', padding: '8px' }}>←</button>
         )}
         <div style={{ flex: 1 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>
-            {STEPS[step]}
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 2 }}>
-            Étape {step + 1} sur {STEPS.length}
-          </p>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>{STEPS[step]}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 2 }}>Étape {step + 1} sur {STEPS.length}</p>
         </div>
       </div>
 
-      {/* Progress */}
       <div className="progress-bar" style={{ marginBottom: 32 }}>
         <div className="progress-fill" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      {/* Step 0 — Compte */}
       {step === 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="input-group">
@@ -149,7 +130,6 @@ export default function RegisterPage() {
         </div>
       )}
 
-      {/* Step 1 — Identité */}
       {step === 1 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -166,24 +146,19 @@ export default function RegisterPage() {
             <label className="input-label">Sexe</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {['F', 'H'].map(s => (
-                <button key={s} type="button"
-                  onClick={() => set('sex', s)}
-                  style={{
-                    padding: '14px', borderRadius: 'var(--radius-sm)',
-                    border: `2px solid ${form.sex === s ? 'var(--primary)' : 'var(--border)'}`,
-                    background: form.sex === s ? 'var(--primary-bg)' : 'white',
-                    color: form.sex === s ? 'var(--primary)' : 'var(--text-muted)',
-                    fontFamily: 'var(--font-body)', fontWeight: 600, cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}>
-                  {s === 'F' ? '👩 Femme' : '👨 Homme'}
-                </button>
+                <button key={s} type="button" onClick={() => set('sex', s)} style={{
+                  padding: '14px', borderRadius: 'var(--radius-sm)',
+                  border: `2px solid ${form.sex === s ? 'var(--primary)' : 'var(--border)'}`,
+                  background: form.sex === s ? 'var(--primary-bg)' : 'white',
+                  color: form.sex === s ? 'var(--primary)' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-body)', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                }}>{s === 'F' ? '👩 Femme' : '👨 Homme'}</button>
               ))}
             </div>
           </div>
           <div className="input-group">
-            <label className="input-label">Âge</label>
-            <input className="input" type="number" value={form.age} onChange={e => set('age', e.target.value)} placeholder="Ton âge" min="15" max="80" />
+            <label className="input-label">Date de naissance</label>
+            <input className="input" type="date" value={form.dob} onChange={e => set('dob', e.target.value)} />
           </div>
           <div className="input-group">
             <label className="input-label">Profession</label>
@@ -192,7 +167,6 @@ export default function RegisterPage() {
         </div>
       )}
 
-      {/* Step 2 — Mesures */}
       {step === 2 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -209,18 +183,14 @@ export default function RegisterPage() {
             <label className="input-label">Niveau d'activité</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {ACTIVITY_LEVELS.map(l => (
-                <button key={l.value} type="button"
-                  onClick={() => set('activityLevel', l.value)}
-                  style={{
-                    padding: '12px 16px', borderRadius: 'var(--radius-sm)',
-                    border: `2px solid ${form.activityLevel === l.value ? 'var(--primary)' : 'var(--border)'}`,
-                    background: form.activityLevel === l.value ? 'var(--primary-bg)' : 'white',
-                    color: 'var(--text)', fontFamily: 'var(--font-body)', cursor: 'pointer',
-                    textAlign: 'left', transition: 'all 0.2s'
-                  }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: form.activityLevel === l.value ? 'var(--primary)' : 'var(--text)' }}>
-                    {l.label}
-                  </div>
+                <button key={l.value} type="button" onClick={() => set('activityLevel', l.value)} style={{
+                  padding: '12px 16px', borderRadius: 'var(--radius-sm)',
+                  border: `2px solid ${form.activityLevel === l.value ? 'var(--primary)' : 'var(--border)'}`,
+                  background: form.activityLevel === l.value ? 'var(--primary-bg)' : 'white',
+                  color: 'var(--text)', fontFamily: 'var(--font-body)', cursor: 'pointer',
+                  textAlign: 'left', transition: 'all 0.2s'
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: form.activityLevel === l.value ? 'var(--primary)' : 'var(--text)' }}>{l.label}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{l.description}</div>
                 </button>
               ))}
@@ -229,22 +199,18 @@ export default function RegisterPage() {
         </div>
       )}
 
-      {/* Step 3 — Objectifs */}
       {step === 3 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="input-group">
             <label className="input-label">Objectif</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {GOALS.map(g => (
-                <button key={g.value} type="button"
-                  onClick={() => set('goal', g.value)}
-                  style={{
-                    padding: '14px 16px', borderRadius: 'var(--radius-sm)',
-                    border: `2px solid ${form.goal === g.value ? 'var(--primary)' : 'var(--border)'}`,
-                    background: form.goal === g.value ? 'var(--primary-bg)' : 'white',
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                    textAlign: 'left', transition: 'all 0.2s'
-                  }}>
+                <button key={g.value} type="button" onClick={() => set('goal', g.value)} style={{
+                  padding: '14px 16px', borderRadius: 'var(--radius-sm)',
+                  border: `2px solid ${form.goal === g.value ? 'var(--primary)' : 'var(--border)'}`,
+                  background: form.goal === g.value ? 'var(--primary-bg)' : 'white',
+                  fontFamily: 'var(--font-body)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s'
+                }}>
                   <div style={{ fontWeight: 700, color: form.goal === g.value ? 'var(--primary)' : 'var(--text)' }}>{g.label}</div>
                   <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>{g.description}</div>
                 </button>
@@ -257,9 +223,15 @@ export default function RegisterPage() {
               <input className="input" type="number" value={form.stepGoal} onChange={e => set('stepGoal', e.target.value)} step="1000" />
             </div>
             <div className="input-group">
-              <label className="input-label">Objectif sommeil (h)</label>
-              <input className="input" type="number" value={form.sleepGoal} onChange={e => set('sleepGoal', e.target.value)} min="5" max="12" />
+              <label className="input-label">Séances/semaine</label>
+              <input className="input" type="number" value={form.sessionsPerWeek} onChange={e => set('sessionsPerWeek', e.target.value)} min="1" max="7" />
             </div>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Jour du bilan hebdomadaire</label>
+            <select className="input" value={form.weeklyBilanDay} onChange={e => set('weeklyBilanDay', +e.target.value)}>
+              {WEEK_DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
           </div>
           <div className="input-group">
             <label className="input-label">Heure du rappel quotidien</label>
@@ -267,74 +239,45 @@ export default function RegisterPage() {
               <input className="input" type="number" value={form.reminderHour} onChange={e => set('reminderHour', e.target.value.padStart(2,'0'))} min="0" max="23" placeholder="Heure (20)" />
               <input className="input" type="number" value={form.reminderMinute} onChange={e => set('reminderMinute', e.target.value.padStart(2,'0'))} min="0" max="59" placeholder="Min (00)" />
             </div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Tu recevras un rappel à {form.reminderHour}h{form.reminderMinute} pour remplir ton suivi
-            </p>
           </div>
         </div>
       )}
 
-      {/* Step 4 — Résumé */}
       {step === 4 && calcs && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="hero-banner">
             <p style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>Bonjour,</p>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>
-              {form.firstName} {form.lastName} 👋
-            </h2>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>{form.firstName} {form.lastName} 👋</h2>
             <p style={{ fontSize: 13, opacity: 0.8 }}>Voici ton programme personnalisé</p>
           </div>
-
           <div className="stat-grid">
-            <div className="stat-card">
-              <div className="stat-label">BMR</div>
-              <div className="stat-value">{calcs.bmr}<span className="stat-unit">kcal</span></div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">TDEE</div>
-              <div className="stat-value">{calcs.tdee}<span className="stat-unit">kcal</span></div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Objectif calorique</div>
-              <div className="stat-value" style={{ color: 'var(--primary)' }}>{calcs.calorieTarget}<span className="stat-unit">kcal</span></div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Pas / jour</div>
-              <div className="stat-value">{(+form.stepGoal).toLocaleString()}</div>
-            </div>
+            <div className="stat-card"><div className="stat-label">BMR</div><div className="stat-value">{calcs.bmr}<span className="stat-unit">kcal</span></div></div>
+            <div className="stat-card"><div className="stat-label">TDEE</div><div className="stat-value">{calcs.tdee}<span className="stat-unit">kcal</span></div></div>
+            <div className="stat-card"><div className="stat-label">Objectif calorique</div><div className="stat-value" style={{ color: 'var(--primary)' }}>{calcs.calorieTarget}<span className="stat-unit">kcal</span></div></div>
+            <div className="stat-card"><div className="stat-label">Pas / jour</div><div className="stat-value">{(+form.stepGoal).toLocaleString()}</div></div>
           </div>
-
           <div className="card">
             <div style={{ marginBottom: 12, fontWeight: 600, fontSize: 14 }}>Macros quotidiennes</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { label: 'Protéines', value: calcs.macros.protein, unit: 'g', color: '#7C3AED' },
-                { label: 'Glucides', value: calcs.macros.carbs, unit: 'g', color: '#EC4899' },
-                { label: 'Lipides', value: calcs.macros.fat, unit: 'g', color: '#F59E0B' },
-              ].map(m => (
-                <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: m.color }} />
-                    <span style={{ fontSize: 14 }}>{m.label}</span>
-                  </div>
-                  <span style={{ fontWeight: 700, color: m.color }}>{m.value}g</span>
+            {[
+              { label: 'Protéines', value: calcs.macros.protein, color: '#7C3AED' },
+              { label: 'Glucides', value: calcs.macros.carbs, color: '#EC4899' },
+              { label: 'Lipides', value: calcs.macros.fat, color: '#F59E0B' },
+            ].map(m => (
+              <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: m.color }} />
+                  <span style={{ fontSize: 14 }}>{m.label}</span>
                 </div>
-              ))}
-            </div>
+                <span style={{ fontWeight: 700, color: m.color }}>{m.value}g</span>
+              </div>
+            ))}
           </div>
-
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
-            ⚡ Ton coach pourra ajuster ces valeurs selon ta progression
-          </p>
         </div>
       )}
 
-      {/* Navigation */}
       <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {step < 4 ? (
-          <button className="btn btn-primary" type="button" onClick={handleNext}>
-            Continuer →
-          </button>
+          <button className="btn btn-primary" type="button" onClick={handleNext}>Continuer →</button>
         ) : (
           <button className="btn btn-primary" type="button" onClick={handleSubmit} disabled={loading}>
             {loading ? 'Création du compte...' : '🚀 Commencer mon programme'}

@@ -14,9 +14,26 @@ export const GOALS = [
   { value: 'prise', label: 'Prise de masse', description: 'Gain musculaire', calAdjust: 250 },
 ];
 
-/**
- * Mifflin-St Jeor
- */
+export const WEEK_DAYS = [
+  { value: 1, label: 'Lundi' },
+  { value: 2, label: 'Mardi' },
+  { value: 3, label: 'Mercredi' },
+  { value: 4, label: 'Jeudi' },
+  { value: 5, label: 'Vendredi' },
+  { value: 6, label: 'Samedi' },
+  { value: 0, label: 'Dimanche' },
+];
+
+export function calculateAgeFromDOB(dob) {
+  if (!dob) return 0;
+  const today = new Date();
+  const birth = new Date(dob);
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 export function calculateBMR({ weight, height, age, sex }) {
   const base = 10 * weight + 6.25 * height - 5 * age;
   return Math.round(sex === 'H' ? base + 5 : base - 161);
@@ -57,5 +74,5 @@ export function getBMICategory(bmi) {
 
 export function getStepBonus({ steps, stepGoal, kcalPer1000 }) {
   const diff = steps - stepGoal;
-  return Math.round((diff / 1000) * kcalPer1000);
+  return Math.round((diff / 1000) * (kcalPer1000 || 20));
 }

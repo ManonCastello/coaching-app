@@ -1,9 +1,10 @@
 // src/pages/WeeklyCheckIn.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -15,18 +16,28 @@ const QUESTIONNAIRE = [
   { key: 'adherence', label: '🎯 Respect du programme', min: '❌ Peu suivi', max: '✅ Parfaitement' },
 ];
 
-export default function WeeklyCheckIn() {
+const PHOTO_SLOTS = [
+  { key: 'face', label: 'Face', icon: '🧍' },
+  { key: 'profile', label: 'Profil', icon: '🧍' },
+  { key: 'back', label: 'Dos', icon: '🧍' },
+];
+
+export default function WeeklyCheckIn({ coachMode }) {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [photos, setPhotos] = useState({ face: null, profile: null, back: null });
+  const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
+  const [uploadingPhoto, setUploadingPhoto] = useState(null);
+  const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
   const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const weekLabel = format(new Date(), "'Semaine du' d MMMM yyyy", { locale: fr });
 
   const [form, setForm] = useState({
-    waist: '', hips: '', thighs: '', arms: '', chest: '',
+    waist: '', hips: '', glutes: '', thighs: '', arms: '',
     energy: '', hunger: '', motivation: '', stress: '', adherence: '',
     weekNotes: '', weekHighlight: '', weekDifficulty: '',
     avgWeight: '',
@@ -42,9 +53,9 @@ export default function WeeklyCheckIn() {
         setForm({
           waist: d.measurements?.waist || '',
           hips: d.measurements?.hips || '',
+          glutes: d.measurements?.glutes || '',
           thighs: d.measurements?.thighs || '',
           arms: d.measurements?.arms || '',
-          chest: d.measurements?.chest || '',
           energy: d.questionnaire?.energy || '',
           hunger: d.questionnaire?.hunger || '',
           motivation: d.questionnaire?.motivation || '',
@@ -55,24 +66,54 @@ export default function WeeklyCheckIn() {
           weekDifficulty: d.weekDifficulty || '',
           avgWeight: d.avgWeight || '',
         });
+        if (d.photoURLs) setPhotoURLs(d.photoURLs);
       }
       setLoading(false);
     }
     load();
   }, [currentUser.uid, weekKey]);
 
+  async function handlePhotoSelect(slot, file) {
+    if (!file) return;
+    setPhotos(p => ({ ...p, [slot]: file }));
+    // Preview
+    const reader = new FileReader();
+    reader.onload = e => setPhotoURLs(p => ({ ...p, [slot]: e.target.result }));
+    reader.readAsDataURL(file);
+  }
+
+  async function uploadPhotos() {
+    const storage = getStorage();
+    const urls = { ...photoURLs };
+    for (const slot of Object.keys(photos)) {
+      if (photos[slot]) {
+        setUploadingPhoto(slot);
+        const storageRef = ref(storage, `clients/${currentUser.uid}/weekly/${weekKey}/${slot}`);
+        await uploadBytes(storageRef, photos[slot]);
+        urls[slot] = await getDownloadURL(storageRef);
+      }
+    }
+    setUploadingPhoto(null);
+    return urls;
+  }
+
   async function handleSave() {
     setSaving(true);
     try {
+      let finalPhotoURLs = photoURLs;
+      // Only upload new files
+      const hasNewPhotos = Object.values(photos).some(p => p !== null);
+      if (hasNewPhotos) finalPhotoURLs = await uploadPhotos();
+
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey), {
         weekStart: weekKey,
         avgWeight: form.avgWeight ? +form.avgWeight : null,
         measurements: {
           waist: form.waist ? +form.waist : null,
           hips: form.hips ? +form.hips : null,
+          glutes: form.glutes ? +form.glutes : null,
           thighs: form.thighs ? +form.thighs : null,
           arms: form.arms ? +form.arms : null,
-          chest: form.chest ? +form.chest : null,
         },
         questionnaire: {
           energy: form.energy ? +form.energy : null,
@@ -81,56 +122,96 @@ export default function WeeklyCheckIn() {
           stress: form.stress ? +form.stress : null,
           adherence: form.adherence ? +form.adherence : null,
         },
+        photoURLs: finalPhotoURLs,
         weekNotes: form.weekNotes,
         weekHighlight: form.weekHighlight,
         weekDifficulty: form.weekDifficulty,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setSaved(true);
-      setTimeout(() => navigate('/dashboard'), 1400);
-    } catch {}
+      setTimeout(() => {
+        if (coachMode) navigate('/coach');
+        else navigate('/dashboard');
+      }, 1400);
+    } catch (e) { console.error(e); }
     setSaving(false);
   }
+
+  const backUrl = coachMode ? '/coach' : '/dashboard';
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
 
   return (
     <div className="app-shell">
       <div className="top-nav">
-        <Link to="/dashboard" style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
+        <Link to={backUrl} style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div className="top-nav-title">Bilan hebdomadaire</div>
         <div style={{ width: 24 }} />
       </div>
 
       <div className="page">
         <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>📅 {weekLabel}</p>
-
         {saved && <div className="alert alert-success">✅ Bilan enregistré !</div>}
 
         {/* Weight */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>⚖️ Poids moyen de la semaine</div>
-          <div className="input-group">
-            <label className="input-label">Poids moyen (kg)</label>
-            <input className="input" type="number" value={form.avgWeight} onChange={e => set('avgWeight', e.target.value)} placeholder="ex: 63.8" step="0.1" />
-          </div>
+          <input className="input" type="number" value={form.avgWeight} onChange={e => set('avgWeight', e.target.value)} placeholder="ex: 63.8" step="0.1" />
         </div>
 
         {/* Measurements */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📏 Mensurations (cm)</div>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Mesure toujours au même endroit, le matin, sans forcer.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Le matin, à jeun, toujours au même endroit.</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
               { key: 'waist', label: 'Taille', emoji: '👗' },
               { key: 'hips', label: 'Hanches', emoji: '🔵' },
+              { key: 'glutes', label: 'Fesses', emoji: '🍑' },
               { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
               { key: 'arms', label: 'Bras', emoji: '💪' },
-              { key: 'chest', label: 'Poitrine', emoji: '👕' },
             ].map(m => (
               <div key={m.key} className="input-group">
                 <label className="input-label">{m.emoji} {m.label}</label>
                 <input className="input" type="number" value={form[m.key]} onChange={e => set(m.key, e.target.value)} placeholder="cm" step="0.5" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Photos */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📸 Photos de progression</div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Visibles uniquement par ta coach.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            {PHOTO_SLOTS.map(slot => (
+              <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={() => fileRefs[slot.key].current.click()}
+                  style={{
+                    width: '100%', aspectRatio: '3/4', borderRadius: 'var(--radius-sm)',
+                    border: `2px dashed ${photoURLs[slot.key] ? 'var(--primary)' : 'var(--border)'}`,
+                    background: photoURLs[slot.key] ? 'transparent' : 'var(--bg)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', overflow: 'hidden', position: 'relative'
+                  }}>
+                  {photoURLs[slot.key] ? (
+                    <img src={photoURLs[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 24 }}>{uploadingPhoto === slot.key ? '⏳' : '+'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</div>
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={fileRefs[slot.key]}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={e => handlePhotoSelect(slot.key, e.target.files[0])}
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{slot.label}</span>
               </div>
             ))}
           </div>
@@ -149,14 +230,9 @@ export default function WeeklyCheckIn() {
                     <button key={n} type="button" onClick={() => set(q.key, n)} style={{
                       flex: 1, height: 44, borderRadius: 'var(--radius-sm)',
                       border: `2px solid ${+form[q.key] === n ? 'var(--primary)' : 'var(--border)'}`,
-                      background: +form[q.key] === n
-                        ? n <= 2 ? 'var(--danger-light)' : n === 3 ? 'var(--warning-light)' : 'var(--success-light)'
-                        : 'white',
-                      color: +form[q.key] === n
-                        ? n <= 2 ? 'var(--danger)' : n === 3 ? 'var(--warning)' : 'var(--success)'
-                        : 'var(--text-muted)',
-                      fontWeight: 700, fontSize: 16, cursor: 'pointer',
-                      transition: 'all 0.2s', fontFamily: 'var(--font-body)'
+                      background: +form[q.key] === n ? n <= 2 ? 'var(--danger-light)' : n === 3 ? 'var(--warning-light)' : 'var(--success-light)' : 'white',
+                      color: +form[q.key] === n ? n <= 2 ? 'var(--danger)' : n === 3 ? 'var(--warning)' : 'var(--success)' : 'var(--text-muted)',
+                      fontWeight: 700, fontSize: 16, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'var(--font-body)'
                     }}>{n}</button>
                   ))}
                 </div>
@@ -168,7 +244,7 @@ export default function WeeklyCheckIn() {
           </div>
         </div>
 
-        {/* Free text questions */}
+        {/* Free text */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>💬 Questions ouvertes</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -181,23 +257,25 @@ export default function WeeklyCheckIn() {
               <textarea className="input" value={form.weekDifficulty} onChange={e => set('weekDifficulty', e.target.value)} placeholder="Ce qui a été difficile..." rows={2} style={{ resize: 'none' }} />
             </div>
             <div className="input-group">
-              <label className="input-label">📝 Notes libres pour ton coach</label>
+              <label className="input-label">📝 Notes pour ta coach</label>
               <textarea className="input" value={form.weekNotes} onChange={e => set('weekNotes', e.target.value)} placeholder="Tout ce que tu veux partager..." rows={3} style={{ resize: 'none' }} />
             </div>
           </div>
         </div>
 
         <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ marginBottom: 16 }}>
-          {saving ? 'Enregistrement...' : '✅ Envoyer le bilan'}
+          {saving ? (uploadingPhoto ? `Upload photo ${uploadingPhoto}...` : 'Enregistrement...') : '✅ Envoyer le bilan'}
         </button>
       </div>
 
-      <nav className="tab-bar">
-        <Link to="/dashboard" className="tab-item"><span style={{ fontSize: 20 }}>🏠</span><span>Accueil</span></Link>
-        <Link to="/checkin/daily" className="tab-item"><span style={{ fontSize: 20 }}>📋</span><span>Suivi</span></Link>
-        <Link to="/checkin/weekly" className="tab-item active"><span style={{ fontSize: 20 }}>📊</span><span>Bilan</span></Link>
-        <Link to="/profile" className="tab-item"><span style={{ fontSize: 20 }}>👤</span><span>Profil</span></Link>
-      </nav>
+      {!coachMode && (
+        <nav className="tab-bar">
+          <Link to="/dashboard" className="tab-item"><span style={{ fontSize: 20 }}>🏠</span><span>Accueil</span></Link>
+          <Link to="/checkin/daily" className="tab-item"><span style={{ fontSize: 20 }}>📋</span><span>Suivi</span></Link>
+          <Link to="/progress" className="tab-item"><span style={{ fontSize: 20 }}>📈</span><span>Progrès</span></Link>
+          <Link to="/profile" className="tab-item active"><span style={{ fontSize: 20 }}>👤</span><span>Profil</span></Link>
+        </nav>
+      )}
     </div>
   );
 }

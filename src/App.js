@@ -3,7 +3,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-// Pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ClientDashboard from './pages/ClientDashboard';
@@ -12,6 +11,7 @@ import WeeklyCheckIn from './pages/WeeklyCheckIn';
 import ClientProfile from './pages/ClientProfile';
 import CoachDashboard from './pages/CoachDashboard';
 import CoachClientDetail from './pages/CoachClientDetail';
+import ProgressPage from './pages/ProgressPage';
 
 import './styles/global.css';
 
@@ -24,42 +24,24 @@ function PrivateRoute({ children, requireCoach }) {
 
 function AppRoutes() {
   const { currentUser, userRole } = useAuth();
-
   return (
     <Routes>
       <Route path="/login" element={
-        currentUser
-          ? <Navigate to={userRole === 'coach' ? '/coach' : '/dashboard'} />
-          : <LoginPage />
+        currentUser ? <Navigate to={userRole === 'coach' ? '/coach' : '/dashboard'} /> : <LoginPage />
       } />
       <Route path="/register" element={<RegisterPage />} />
-
-      {/* Client routes */}
-      <Route path="/dashboard" element={
-        <PrivateRoute><ClientDashboard /></PrivateRoute>
-      } />
-      <Route path="/checkin/daily" element={
-        <PrivateRoute><DailyCheckIn /></PrivateRoute>
-      } />
-      <Route path="/checkin/weekly" element={
-        <PrivateRoute><WeeklyCheckIn /></PrivateRoute>
-      } />
-      <Route path="/profile" element={
-        <PrivateRoute><ClientProfile /></PrivateRoute>
-      } />
-
-      {/* Coach routes */}
-      <Route path="/coach" element={
-        <PrivateRoute requireCoach><CoachDashboard /></PrivateRoute>
-      } />
-      <Route path="/coach/client/:clientId" element={
-        <PrivateRoute requireCoach><CoachClientDetail /></PrivateRoute>
-      } />
-
+      <Route path="/dashboard" element={<PrivateRoute><ClientDashboard /></PrivateRoute>} />
+      <Route path="/checkin/daily" element={<PrivateRoute><DailyCheckIn /></PrivateRoute>} />
+      <Route path="/checkin/weekly" element={<PrivateRoute><WeeklyCheckIn /></PrivateRoute>} />
+      <Route path="/profile" element={<PrivateRoute><ClientProfile /></PrivateRoute>} />
+      <Route path="/progress" element={<PrivateRoute><ProgressPage /></PrivateRoute>} />
+      <Route path="/coach" element={<PrivateRoute requireCoach><CoachDashboard /></PrivateRoute>} />
+      <Route path="/coach/client/:clientId" element={<PrivateRoute requireCoach><CoachClientDetail /></PrivateRoute>} />
+      <Route path="/coach/my-checkin" element={<PrivateRoute requireCoach><DailyCheckIn coachMode /></PrivateRoute>} />
+      <Route path="/coach/my-weekly" element={<PrivateRoute requireCoach><WeeklyCheckIn coachMode /></PrivateRoute>} />
+      <Route path="/coach/my-progress" element={<PrivateRoute requireCoach><ProgressPage coachMode /></PrivateRoute>} />
       <Route path="*" element={
-        currentUser
-          ? <Navigate to={userRole === 'coach' ? '/coach' : '/dashboard'} />
-          : <Navigate to="/login" />
+        currentUser ? <Navigate to={userRole === 'coach' ? '/coach' : '/dashboard'} /> : <Navigate to="/login" />
       } />
     </Routes>
   );

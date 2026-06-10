@@ -8,7 +8,6 @@ import { format, subDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import CoachToggle from '../components/CoachToggle';
-import { useAuth } from '../contexts/AuthContext';
 
 export default function DailyCheckIn({ coachMode }) {
   const { currentUser } = useAuth();

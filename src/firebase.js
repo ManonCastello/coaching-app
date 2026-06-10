@@ -7,12 +7,12 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "REMPLACE_PAR_TA_CLE",
-  authDomain: "TON_PROJET.firebaseapp.com",
-  projectId: "TON_PROJET_ID",
-  storageBucket: "TON_PROJET.appspot.com",
-  messagingSenderId: "TON_SENDER_ID",
-  appId: "TON_APP_ID"
+  apiKey: "AIzaSyAzLaxxHfm9QFF57lOPjbAejrScrOo9yH4",
+  authDomain: "manon-castello-coaching-68195.firebaseapp.com",
+  projectId: "manon-castello-coaching-68195",
+  storageBucket: "manon-castello-coaching-68195.firebasestorage.app",
+  messagingSenderId: "515195558083",
+  appId: "1:515195558083:web:d21fbf7cc79650a9ebea76"
 };
 
 const app = initializeApp(firebaseConfig);

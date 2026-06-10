@@ -26,7 +26,7 @@ export default function DailyCheckIn({ coachMode }) {
 
   const [form, setForm] = useState({
     weight: '', steps: '', calories: '',
-    protein: '', sleep: '', sleepQuality: '',
+    protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '',
     didProgramSession: null,
     extraActivity: '', extraActivityCal: '',
     notes: '',
@@ -51,6 +51,8 @@ export default function DailyCheckIn({ coachMode }) {
           steps: data.steps || '',
           calories: data.calories || '',
           protein: data.protein || '',
+          carbs: data.carbs || '',
+          fat: data.fat || '',
           sleep: data.sleep || '',
           sleepQuality: data.sleepQuality || '',
           didProgramSession: data.didProgramSession ?? null,
@@ -60,7 +62,7 @@ export default function DailyCheckIn({ coachMode }) {
         });
       } else {
         setExisting(null);
-        setForm({ weight: '', steps: '', calories: '', protein: '', sleep: '', sleepQuality: '', didProgramSession: null, extraActivity: '', extraActivityCal: '', notes: '' });
+        setForm({ weight: '', steps: '', calories: '', protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '', didProgramSession: null, extraActivity: '', extraActivityCal: '', notes: '' });
       }
 
       // Load week balance (last 7 days)
@@ -96,6 +98,8 @@ export default function DailyCheckIn({ coachMode }) {
         steps: form.steps ? +form.steps : 0,
         calories: form.calories ? +form.calories : 0,
         protein: form.protein ? +form.protein : 0,
+        carbs: form.carbs ? +form.carbs : 0,
+        fat: form.fat ? +form.fat : 0,
         sleep: form.sleep ? +form.sleep : null,
         sleepQuality: form.sleepQuality ? +form.sleepQuality : null,
         didProgramSession: form.didProgramSession,
@@ -237,7 +241,7 @@ export default function DailyCheckIn({ coachMode }) {
           )}
         </div>
 
-        {/* Calories */}
+        {/* Calories & Macros */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>🍽️ Alimentation</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -245,21 +249,17 @@ export default function DailyCheckIn({ coachMode }) {
               <label className="input-label">Calories consommées (kcal)</label>
               <input className="input" type="number" value={form.calories} onChange={e => set('calories', e.target.value)} placeholder={`Objectif ajusté : ${adjustedTarget} kcal`} />
             </div>
-            <div className="input-group">
-              <label className="input-label">Protéines (g) — optionnel</label>
-              <input className="input" type="number" value={form.protein} onChange={e => set('protein', e.target.value)} placeholder={`Objectif : ${targets.protein || '—'} g`} />
-            </div>
           </div>
           {form.calories && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 10, marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>
                 <span>{form.calories} kcal</span>
-                <span>/ {adjustedTarget} kcal (objectif ajusté)</span>
+                <span>/ {adjustedTarget} kcal</span>
               </div>
               <div className="progress-bar">
                 <div className="progress-fill" style={{ width: `${Math.min(100, (+form.calories / adjustedTarget) * 100)}%` }} />
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
                 <span>Base: {targets.calories}</span>
                 {stepBonus !== 0 && <span style={{ color: stepBonus > 0 ? 'var(--success)' : 'var(--danger)' }}>Pas: {stepBonus > 0 ? '+' : ''}{stepBonus}</span>}
                 {extraCal > 0 && <span style={{ color: 'var(--success)' }}>Activité: +{extraCal}</span>}
@@ -267,6 +267,47 @@ export default function DailyCheckIn({ coachMode }) {
               </div>
             </div>
           )}
+          <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Macros — recommandé
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                { key: 'protein', label: 'Protéines', color: '#F59E0B', target: targets.protein },
+                { key: 'carbs', label: 'Glucides', color: '#EC4899', target: targets.carbs },
+                { key: 'fat', label: 'Lipides', color: '#7C3AED', target: targets.fat },
+              ].map(m => (
+                <div key={m.key}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: m.color }}>{m.label}</label>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Obj: {m.target || '—'} g</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      className="input"
+                      type="number"
+                      value={form[m.key]}
+                      onChange={e => set(m.key, e.target.value)}
+                      placeholder={`g`}
+                      style={{ flex: 1 }}
+                    />
+                    {form[m.key] && m.target && (
+                      <span style={{ fontSize: 12, fontWeight: 700, minWidth: 36, textAlign: 'right',
+                        color: +form[m.key] >= m.target * 0.9 ? 'var(--success)' : +form[m.key] >= m.target * 0.7 ? 'var(--warning)' : 'var(--danger)'
+                      }}>
+                        {Math.round((+form[m.key] / m.target) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  {form[m.key] && m.target && (
+                    <div className="progress-bar" style={{ marginTop: 6, height: 5 }}>
+                      <div style={{ height: '100%', borderRadius: 100, background: m.color, width: `${Math.min(100, (+form[m.key] / m.target) * 100)}%`, transition: 'width 0.4s' }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Sleep */}

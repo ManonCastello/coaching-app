@@ -4,7 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { format, startOfWeek } from 'date-fns';
+import { format, startOfWeek, subDays } from 'date-fns';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, Cell } from 'recharts';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 
@@ -30,8 +31,10 @@ export default function WeeklyCheckIn({ coachMode }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [weekStats, setWeekStats] = useState(null);
   const [saved, setSaved] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
@@ -49,6 +52,8 @@ export default function WeeklyCheckIn({ coachMode }) {
 
   useEffect(() => {
     async function load() {
+      const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+      if (profileDoc.exists()) setProfile(profileDoc.data());
       const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey));
       if (weekDoc.exists()) {
         const d = weekDoc.data();
@@ -69,6 +74,24 @@ export default function WeeklyCheckIn({ coachMode }) {
           avgWeight: d.avgWeight || '',
         });
         if (d.photoURLs) setPhotoURLs(d.photoURLs);
+      }
+
+      // Calculate week stats from daily entries
+      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const weekStart = weekKey;
+      const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
+      const snap = await getDocs(q);
+      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= weekStart);
+      if (entries.length > 0) {
+        const days = entries.map(e => ({
+          label: format(new Date(e.date), 'EEE', { locale: fr }),
+          calories: e.calories || 0,
+          protein: e.protein || 0,
+          carbs: e.carbs || 0,
+          fat: e.fat || 0,
+        })).reverse();
+        const avg = (key) => Math.round(days.reduce((s, d) => s + d[key], 0) / days.length);
+        setWeekStats({ days, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat'), count: days.length });
       }
       setLoading(false);
     }
@@ -234,6 +257,60 @@ export default function WeeklyCheckIn({ coachMode }) {
             ))}
           </div>
         </div>
+
+
+        {/* Week nutrition summary */}
+        {weekStats && weekStats.count > 0 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📊 Résumé nutritionnel de la semaine</div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Basé sur {weekStats.count} jour{weekStats.count > 1 ? 's' : ''} de suivi.</p>
+
+            {/* Bar chart */}
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={weekStats.days} barSize={20}>
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} width={30} />
+                <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} formatter={(v, n) => [`${v} kcal`, 'Calories']} />
+                <Bar dataKey="calories" radius={[4,4,0,0]}>
+                  {weekStats.days.map((d, i) => (
+                    <Cell key={i} fill={d.calories >= (profile?.targets?.calories || 2000) * 0.9 ? '#7C3AED' : '#C4B5FD'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+
+            {/* Averages vs targets */}
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[
+                { label: '🔥 Calories moy.', avg: weekStats.avgCalories, target: profile?.targets?.calories, unit: 'kcal', color: 'var(--primary)' },
+                { label: '🥩 Protéines moy.', avg: weekStats.avgProtein, target: profile?.targets?.protein, unit: 'g', color: '#F59E0B' },
+                { label: '🌾 Glucides moy.', avg: weekStats.avgCarbs, target: profile?.targets?.carbs, unit: 'g', color: '#EC4899' },
+                { label: '🥑 Lipides moy.', avg: weekStats.avgFat, target: profile?.targets?.fat, unit: 'g', color: '#7C3AED' },
+              ].map(m => {
+                const pct = m.target ? Math.round((m.avg / m.target) * 100) : null;
+                const ok = pct && pct >= 85 && pct <= 115;
+                return (
+                  <div key={m.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{m.label}</span>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontWeight: 700, color: m.color }}>{m.avg} {m.unit}</span>
+                        {pct && <span style={{ fontSize: 11, fontWeight: 700, color: ok ? 'var(--success)' : pct < 85 ? 'var(--danger)' : 'var(--warning)' }}>
+                          {pct > 100 ? '+' : ''}{pct - 100}% vs obj.
+                        </span>}
+                      </div>
+                    </div>
+                    {m.target && (
+                      <div className="progress-bar" style={{ height: 5 }}>
+                        <div style={{ height: '100%', borderRadius: 100, background: m.color, width: `${Math.min(100, pct)}%`, opacity: 0.7 }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Questionnaire */}
         <div className="card" style={{ marginBottom: 16 }}>

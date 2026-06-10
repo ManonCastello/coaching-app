@@ -21,13 +21,17 @@ export default function CoachClientDetail() {
   const [targets, setTargets] = useState({});
   const [activeTab, setActiveTab] = useState('overview');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editInfo, setEditInfo] = useState(false);
+  const [infoForm, setInfoForm] = useState({});
+  function setI(key, val) { setInfoForm(p => ({ ...p, [key]: val })); }
+
 
   function setT(key, val) { setTargets(p => ({ ...p, [key]: val })); }
 
   useEffect(() => {
     async function load() {
       const clientDoc = await getDoc(doc(db, 'clients', clientId));
-      if (clientDoc.exists()) { const data = clientDoc.data(); setClient(data); setTargets(data.targets || {}); }
+      if (clientDoc.exists()) { const data = clientDoc.data(); setClient(data); setTargets(data.targets || {}); setInfoForm({ firstName: data.firstName, lastName: data.lastName, dob: data.dob || '', profession: data.profession || '', weight: data.weight, height: data.height, sex: data.sex, activityLevel: data.activityLevel, goal: data.goal }); }
       const dailyQ = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(30));
       const dailySnap = await getDocs(dailyQ);
       setEntries(dailySnap.docs.map(d => d.data()).reverse());
@@ -94,6 +98,33 @@ export default function CoachClientDetail() {
       resetAt: serverTimestamp(),
     });
     setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+
+  async function saveInfo() {
+    setSaving(true);
+    try {
+      const { calculateAgeFromDOB, calculateBMR, calculateTDEE } = await import('../utils/calculations');
+      const age = calculateAgeFromDOB(infoForm.dob);
+      const bmr = calculateBMR({ weight: +infoForm.weight, height: +infoForm.height, age, sex: infoForm.sex });
+      const tdee = calculateTDEE({ bmr, activityLevel: infoForm.activityLevel });
+      await updateDoc(doc(db, 'clients', clientId), {
+        firstName: infoForm.firstName,
+        lastName: infoForm.lastName,
+        dob: infoForm.dob,
+        profession: infoForm.profession,
+        weight: +infoForm.weight,
+        height: +infoForm.height,
+        sex: infoForm.sex,
+        activityLevel: infoForm.activityLevel,
+        goal: infoForm.goal,
+        bmr, tdee,
+      });
+      setClient(p => ({ ...p, ...infoForm, bmr, tdee }));
+      setEditInfo(false);
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch(e) { console.error(e); }
+    setSaving(false);
   }
 
   async function toggleArchive() {
@@ -190,6 +221,74 @@ export default function CoachClientDetail() {
               <div className="stat-card"><div className="stat-label">Moy. calories</div><div className="stat-value">{avgCalories}<span className="stat-unit">kcal</span></div></div>
               <div className="stat-card"><div className="stat-label">Moy. pas</div><div className="stat-value" style={{ fontSize: 18 }}>{avgSteps.toLocaleString()}</div></div>
               <div className="stat-card"><div className="stat-label">Séances</div><div className="stat-value">{sessionsTracked > 0 ? `${sessionsDone}/${sessionsTracked}` : '—'}</div></div>
+            </div>
+
+
+            {/* Edit client info */}
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editInfo ? 16 : 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>👤 Informations client</div>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditInfo(!editInfo)}>
+                  {editInfo ? 'Annuler' : 'Modifier'}
+                </button>
+              </div>
+              {!editInfo ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+                  {[
+                    { label: 'Prénom', value: client.firstName },
+                    { label: 'Nom', value: client.lastName },
+                    { label: 'Date de naissance', value: client.dob ? new Date(client.dob).toLocaleDateString('fr-FR') : '—' },
+                    { label: 'Âge', value: age ? `${age} ans` : '—' },
+                    { label: 'Profession', value: client.profession || '—' },
+                    { label: 'Poids initial', value: `${client.weight} kg` },
+                    { label: 'Taille', value: `${client.height} cm` },
+                    { label: 'Sexe', value: client.sex === 'F' ? 'Femme' : 'Homme' },
+                    { label: 'Activité', value: client.activityLevel },
+                    { label: 'Objectif', value: client.goal },
+                  ].map(r => (
+                    <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-light)', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>
+                      <span style={{ fontWeight: 600 }}>{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="input-group"><label className="input-label">Prénom</label><input className="input" value={infoForm.firstName || ''} onChange={e => setI('firstName', e.target.value)} /></div>
+                    <div className="input-group"><label className="input-label">Nom</label><input className="input" value={infoForm.lastName || ''} onChange={e => setI('lastName', e.target.value)} /></div>
+                  </div>
+                  <div className="input-group"><label className="input-label">Date de naissance</label><input className="input" type="date" value={infoForm.dob || ''} onChange={e => setI('dob', e.target.value)} /></div>
+                  <div className="input-group"><label className="input-label">Profession</label><input className="input" value={infoForm.profession || ''} onChange={e => setI('profession', e.target.value)} /></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="input-group"><label className="input-label">Poids (kg)</label><input className="input" type="number" value={infoForm.weight || ''} onChange={e => setI('weight', e.target.value)} step="0.1" /></div>
+                    <div className="input-group"><label className="input-label">Taille (cm)</label><input className="input" type="number" value={infoForm.height || ''} onChange={e => setI('height', e.target.value)} /></div>
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Sexe</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {['F', 'H'].map(s => (
+                        <button key={s} type="button" onClick={() => setI('sex', s)} style={{ padding: '10px', borderRadius: 'var(--radius-sm)', border: `2px solid ${infoForm.sex === s ? 'var(--primary)' : 'var(--border)'}`, background: infoForm.sex === s ? 'var(--primary-bg)' : 'white', color: infoForm.sex === s ? 'var(--primary)' : 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>{s === 'F' ? 'Femme' : 'Homme'}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Niveau d'activité</label>
+                    <select className="input" value={infoForm.activityLevel || ''} onChange={e => setI('activityLevel', e.target.value)}>
+                      {[{value:'sedentaire',label:'Sédentaire'},{value:'leger',label:'Légèrement actif'},{value:'actif',label:'Actif'},{value:'tres_actif',label:'Très actif'},{value:'extreme',label:'Extrêmement actif'}].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Objectif</label>
+                    <select className="input" value={infoForm.goal || ''} onChange={e => setI('goal', e.target.value)}>
+                      {[{value:'seche',label:'Sèche'},{value:'maintien',label:'Maintien'},{value:'prise',label:'Prise de masse'}].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <button className="btn btn-primary" onClick={saveInfo} disabled={saving}>
+                    {saving ? 'Enregistrement...' : '✅ Enregistrer les infos'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {weights.length > 1 && (

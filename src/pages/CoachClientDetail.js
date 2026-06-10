@@ -356,6 +356,18 @@ export default function CoachClientDetail() {
               </div>
             )}
 
+
+            {/* Week balance reset */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>⚖️ Balance calorique semaine</div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                Remet la balance de la semaine en cours à zéro pour ce client.
+              </p>
+              <button onClick={resetWeekBalance} className="btn btn-secondary">
+                🔄 Remettre la balance à zéro
+              </button>
+            </div>
+
             {/* Archive / Delete */}
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>⚙️ Gestion du compte</div>

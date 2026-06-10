@@ -6,7 +6,7 @@ import { db } from '../firebase';
 import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, getDay, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip, CartesianGrid, XAxis, YAxis } from 'recharts';
 import TabBar from '../components/TabBar';
 import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
@@ -192,15 +192,18 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        {/* Weight sparkline */}
+        {/* Weight chart — same as coach view */}
         {recentEntries.filter(e => e.weight).length > 1 && (
           <>
             <h2 className="section-title">Évolution du poids</h2>
-            <div className="card" style={{ marginBottom: 20, padding: '16px 16px 8px' }}>
-              <ResponsiveContainer width="100%" height={100}>
+            <div className="card" style={{ marginBottom: 20, padding: '16px 8px 8px' }}>
+              <ResponsiveContainer width="100%" height={150}>
                 <LineChart data={recentEntries.filter(e => e.weight)}>
-                  <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2.5} dot={{ fill: 'var(--primary)', r: 3 }} />
-                  <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={v => [`${v} kg`]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+                  <XAxis dataKey="date" tickFormatter={d => format(new Date(d), 'dd/MM', { locale: fr })} tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} width={35} />
+                  <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: 'var(--primary)' }} />
+                  <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={v => [`${v} kg`, 'Poids']} labelFormatter={d => format(new Date(d), 'dd/MM/yyyy', { locale: fr })} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

@@ -4,9 +4,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
+
+const CLOUDINARY_CLOUD = 'dduaqnygn';
+const CLOUDINARY_PRESET = 'fitlog_photos';
 
 const QUESTIONNAIRE = [
   { key: 'energy', label: '⚡ Niveau d\'énergie cette semaine', min: '😴 Épuisé(e)', max: '🚀 Plein(e) d\'énergie' },
@@ -17,9 +19,9 @@ const QUESTIONNAIRE = [
 ];
 
 const PHOTO_SLOTS = [
-  { key: 'face', label: 'Face', icon: '🧍' },
-  { key: 'profile', label: 'Profil', icon: '🧍' },
-  { key: 'back', label: 'Dos', icon: '🧍' },
+  { key: 'face', label: 'Face' },
+  { key: 'profile', label: 'Profil' },
+  { key: 'back', label: 'Dos' },
 ];
 
 export default function WeeklyCheckIn({ coachMode }) {
@@ -28,9 +30,8 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [photos, setPhotos] = useState({ face: null, profile: null, back: null });
+  const [uploadingSlot, setUploadingSlot] = useState(null);
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
-  const [uploadingPhoto, setUploadingPhoto] = useState(null);
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
   const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -73,38 +74,48 @@ export default function WeeklyCheckIn({ coachMode }) {
     load();
   }, [currentUser.uid, weekKey]);
 
+  async function uploadToCloudinary(file, slot, clientProfile) {
+    const lastName = (clientProfile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
+    const firstName = (clientProfile?.firstName || '').toLowerCase().replace(/\s/g, '_');
+    const publicId = `fitlog/${currentUser.uid}/${weekKey}_${lastName}_${firstName}_${slot}`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+    formData.append('public_id', publicId);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.secure_url) return data.secure_url;
+    throw new Error('Upload failed');
+  }
+
   async function handlePhotoSelect(slot, file) {
     if (!file) return;
-    setPhotos(p => ({ ...p, [slot]: file }));
-    // Preview
+    // Show preview immediately
     const reader = new FileReader();
     reader.onload = e => setPhotoURLs(p => ({ ...p, [slot]: e.target.result }));
     reader.readAsDataURL(file);
-  }
 
-  async function uploadPhotos() {
-    const storage = getStorage();
-    const urls = { ...photoURLs };
-    for (const slot of Object.keys(photos)) {
-      if (photos[slot]) {
-        setUploadingPhoto(slot);
-        const storageRef = ref(storage, `clients/${currentUser.uid}/weekly/${weekKey}/${slot}`);
-        await uploadBytes(storageRef, photos[slot]);
-        urls[slot] = await getDownloadURL(storageRef);
-      }
+    // Upload to Cloudinary
+    setUploadingSlot(slot);
+    try {
+      const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+      const profile = profileDoc.exists() ? profileDoc.data() : {};
+      const url = await uploadToCloudinary(file, slot, profile);
+      setPhotoURLs(p => ({ ...p, [slot]: url }));
+    } catch (e) {
+      console.error('Upload error', e);
     }
-    setUploadingPhoto(null);
-    return urls;
+    setUploadingSlot(null);
   }
 
   async function handleSave() {
     setSaving(true);
     try {
-      let finalPhotoURLs = photoURLs;
-      // Only upload new files
-      const hasNewPhotos = Object.values(photos).some(p => p !== null);
-      if (hasNewPhotos) finalPhotoURLs = await uploadPhotos();
-
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey), {
         weekStart: weekKey,
         avgWeight: form.avgWeight ? +form.avgWeight : null,
@@ -122,7 +133,7 @@ export default function WeeklyCheckIn({ coachMode }) {
           stress: form.stress ? +form.stress : null,
           adherence: form.adherence ? +form.adherence : null,
         },
-        photoURLs: finalPhotoURLs,
+        photoURLs,
         weekNotes: form.weekNotes,
         weekHighlight: form.weekHighlight,
         weekDifficulty: form.weekDifficulty,
@@ -182,36 +193,42 @@ export default function WeeklyCheckIn({ coachMode }) {
         {/* Photos */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📸 Photos de progression</div>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Visibles uniquement par ta coach.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Visibles uniquement par ta coach. Upload automatique.</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             {PHOTO_SLOTS.map(slot => (
-              <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <div
-                  onClick={() => fileRefs[slot.key].current.click()}
+                  onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()}
                   style={{
                     width: '100%', aspectRatio: '3/4', borderRadius: 'var(--radius-sm)',
                     border: `2px dashed ${photoURLs[slot.key] ? 'var(--primary)' : 'var(--border)'}`,
                     background: photoURLs[slot.key] ? 'transparent' : 'var(--bg)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', overflow: 'hidden', position: 'relative'
+                    cursor: uploadingSlot ? 'wait' : 'pointer', overflow: 'hidden',
                   }}>
-                  {photoURLs[slot.key] ? (
+                  {uploadingSlot === slot.key ? (
+                    <div style={{ textAlign: 'center' }}>
+                      <div className="spinner" style={{ width: 24, height: 24, margin: '0 auto' }} />
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Upload...</div>
+                    </div>
+                  ) : photoURLs[slot.key] ? (
                     <img src={photoURLs[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 24 }}>{uploadingPhoto === slot.key ? '⏳' : '+'}</div>
+                      <div style={{ fontSize: 28, color: 'var(--text-light)' }}>+</div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</div>
                     </div>
                   )}
                 </div>
                 <input
                   ref={fileRefs[slot.key]}
-                  type="file"
-                  accept="image/*"
+                  type="file" accept="image/*"
                   style={{ display: 'none' }}
                   onChange={e => handlePhotoSelect(slot.key, e.target.files[0])}
                 />
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{slot.label}</span>
+                <span style={{ fontSize: 11, color: photoURLs[slot.key] ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                  {photoURLs[slot.key] ? '✅ ' : ''}{slot.label}
+                </span>
               </div>
             ))}
           </div>
@@ -263,8 +280,8 @@ export default function WeeklyCheckIn({ coachMode }) {
           </div>
         </div>
 
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ marginBottom: 16 }}>
-          {saving ? (uploadingPhoto ? `Upload photo ${uploadingPhoto}...` : 'Enregistrement...') : '✅ Envoyer le bilan'}
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving || !!uploadingSlot} style={{ marginBottom: 16 }}>
+          {saving ? 'Enregistrement...' : uploadingSlot ? 'Upload en cours...' : '✅ Envoyer le bilan'}
         </button>
       </div>
 

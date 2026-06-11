@@ -303,7 +303,7 @@ export default function CoachClientDetail() {
             <p style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>{client.profession} · {age ? `${age} ans` : ''} · {client.sex === 'F' ? 'Femme' : 'Homme'}</p>
             <p style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>BMR {bmr || '—'} · TDEE {tdee || '—'} kcal</p>
           </div>
-          {/* Formule selector */}
+          {/* Formule selector + mode badge */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {FORMULES.map(f => (
               <button key={f.value} onClick={() => saveFormule(f.value)} style={{
@@ -313,6 +313,12 @@ export default function CoachClientDetail() {
                 fontFamily: 'var(--font-body)'
               }}>{f.label}</button>
             ))}
+            <div style={{
+              padding: '4px 10px', borderRadius: 100, fontSize: 11, fontWeight: 700, textAlign: 'center',
+              background: 'rgba(255,255,255,0.15)', color: 'white',
+            }}>
+              {(client.coachingMode || 'tracking') === 'intuitif' ? '🎯 Intuitif' : '📊 Tracking'}
+            </div>
           </div>
         </div>
       </div>

@@ -81,11 +81,9 @@ export default function ClientDashboard() {
     const wgQ = q3(col3(db, 'clients', currentUser.uid, 'weekGoals'), ob3('weekStart', 'desc'), lim3(1));
     const wgSnap = await gd3(wgQ);
     if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
-    // Coches du jour
-    const todayStr = new Date().toISOString().split('T')[0];
-    const { doc: docRef, getDoc: gdoc } = await import('firebase/firestore');
-    const todayDoc = await gdoc(docRef(db, 'clients', currentUser.uid, 'dailyEntries', todayStr));
-    if (todayDoc.exists()) setTodayGoalChecks(todayDoc.data().goalChecks || null);
+    // Coches du jour — réutilise todayDoc déjà chargé
+    const todayEntryDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today));
+    if (todayEntryDoc.exists()) setTodayGoalChecks(todayEntryDoc.data().goalChecks || null);
 
     setLoading(false);
   }

@@ -12,6 +12,7 @@ import ClientProfile from './pages/ClientProfile';
 import CoachDashboard from './pages/CoachDashboard';
 import CoachClientDetail from './pages/CoachClientDetail';
 import ProgressPage from './pages/ProgressPage';
+import MealPlan from './pages/MealPlan';
 
 import './styles/global.css';
 
@@ -43,6 +44,7 @@ function AppRoutes() {
       <Route path="/checkin/weekly" element={<PrivateRoute><WeeklyCheckIn /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><ClientProfile /></PrivateRoute>} />
       <Route path="/progress" element={<PrivateRoute><ProgressPage /></PrivateRoute>} />
+      <Route path="/mealplan" element={<PrivateRoute><MealPlan /></PrivateRoute>} />
 
       {/* Coach-only routes */}
       <Route path="/coach" element={<PrivateRoute requireCoach><CoachDashboard /></PrivateRoute>} />

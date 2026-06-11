@@ -40,6 +40,12 @@ export default function CoachClientDetail() {
   const [bilanDay, setBilanDay] = useState(1);
   const [weekGoals, setWeekGoals] = useState(null);
   const [savingGoals, setSavingGoals] = useState(false);
+  const [mealSplit, setMealSplit] = useState({ morning: 25, lunch: 35, dinner: 30, snack: 0 });
+  const [hasSnack, setHasSnack] = useState(false);
+  const [savingMealSplit, setSavingMealSplit] = useState(false);
+  const [customFoods, setCustomFoods] = useState({ protein: [], carbs: [], fat: [] });
+  const [newFood, setNewFood] = useState({ macro: 'protein', name: '', unit: 'g', gramsPerUnit: 100, protPer100g: '', carbsPer100g: '', fatPer100g: '', visual: '', emoji: '🍽️' });
+  const [showAddFood, setShowAddFood] = useState(false);
   const [goalsForm, setGoalsForm] = useState({
     protein: { active: false, includeSnack: false },
     vegetables: { active: false },
@@ -58,6 +64,9 @@ export default function CoachClientDetail() {
         setClient(data);
         setTargets(data.targets || {});
         setInfoForm({ firstName: data.firstName, lastName: data.lastName, dob: data.dob || '', profession: data.profession || '', weight: data.weight, height: data.height, sex: data.sex, activityLevel: data.activityLevel, goal: data.goal });
+        setMealSplit(data.mealSplit || { morning: 25, lunch: 35, dinner: 30, snack: 0 });
+        setHasSnack(!!(data.mealSplit?.snack > 0));
+        setCustomFoods(data.customFoods || { protein: [], carbs: [], fat: [] });
         setStartForm({ weight: data.startWeight || data.weight || '', waist: data.startMeasurements?.waist || '', hips: data.startMeasurements?.hips || '', glutes: data.startMeasurements?.glutes || '', thighs: data.startMeasurements?.thighs || '', arms: data.startMeasurements?.arms || '' });
         setStartPhotos(data.startPhotos || { face: null, profile: null, back: null });
         const [h, m] = (data.reminderTime || '20:00').split(':');
@@ -213,6 +222,27 @@ export default function CoachClientDetail() {
     await updateDoc(doc(db, 'clients', clientId), { startWeight: startForm.weight ? +startForm.weight : null, startMeasurements, startPhotos });
     setClient(p => ({ ...p, startWeight: +startForm.weight, startMeasurements, startPhotos }));
     setEditStartData(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveMealSplit() {
+    setSavingMealSplit(true);
+    const split = { ...mealSplit, snack: hasSnack ? (mealSplit.snack || 10) : 0 };
+    // Normaliser pour que le total = 100
+    const total = Object.values(split).reduce((a, b) => a + b, 0);
+    await updateDoc(doc(db, 'clients', clientId), { mealSplit: split, hasSnack });
+    setClient(p => ({ ...p, mealSplit: split, hasSnack }));
+    setSavingMealSplit(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveCustomFood() {
+    const macro = newFood.macro;
+    const food = { ...newFood };
+    delete food.macro;
+    const updated = { ...customFoods, [macro]: [...(customFoods[macro] || []), food] };
+    setCustomFoods(updated);
+    await updateDoc(doc(db, 'clients', clientId), { customFoods: updated });
+    setNewFood({ macro: 'protein', name: '', unit: 'g', gramsPerUnit: 100, protPer100g: '', carbsPer100g: '', fatPer100g: '', visual: '', emoji: '🍽️' });
+    setShowAddFood(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
   async function saveWeekGoals() {
@@ -891,6 +921,146 @@ export default function CoachClientDetail() {
               <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={saveWeekGoals} disabled={savingGoals}>
                 {savingGoals ? 'Enregistrement...' : '✅ Appliquer pour cette semaine'}
               </button>
+            </div>
+
+            {/* Découpage repas & aliments personnalisés */}
+            <div className="card">
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🍽️ Fiches repas — Découpage calorique</div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Définis le % de calories par repas. Total actuel : {Object.values(mealSplit).reduce((a,b)=>a+b,0) + (hasSnack ? 0 : 0)}%.
+              </p>
+
+              {[
+                { key: 'morning', label: 'Petit-déjeuner 🌅' },
+                { key: 'lunch', label: 'Déjeuner ☀️' },
+                { key: 'dinner', label: 'Dîner 🌙' },
+              ].map(m => (
+                <div key={m.key} style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600 }}>{m.label}</label>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>{mealSplit[m.key]}%</span>
+                  </div>
+                  <input type="range" min="0" max="60" value={mealSplit[m.key]}
+                    onChange={e => setMealSplit(p => ({ ...p, [m.key]: +e.target.value }))}
+                    style={{ width: '100%', accentColor: 'var(--primary)' }} />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    ≈ {Math.round((client.targets?.calories || 2000) * mealSplit[m.key] / 100)} kcal · {Math.round((client.targets?.protein || 130) * mealSplit[m.key] / 100)}g prot · {Math.round((client.targets?.carbs || 150) * mealSplit[m.key] / 100)}g gluc · {Math.round((client.targets?.fat || 55) * mealSplit[m.key] / 100)}g lip
+                  </div>
+                </div>
+              ))}
+
+              {/* Collation */}
+              <div style={{ padding: '12px 0', borderTop: '1px solid var(--border-light)', marginTop: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: hasSnack ? 10 : 0 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>Collation 🍱</label>
+                  <button type="button" onClick={() => setHasSnack(!hasSnack)} style={{
+                    padding: '5px 12px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: hasSnack ? 'var(--primary)' : 'var(--border-light)',
+                    color: hasSnack ? 'white' : 'var(--text-muted)', fontFamily: 'var(--font-body)',
+                  }}>{hasSnack ? '✅ Incluse' : 'Non incluse'}</button>
+                </div>
+                {hasSnack && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>% calories</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>{mealSplit.snack || 10}%</span>
+                    </div>
+                    <input type="range" min="5" max="25" value={mealSplit.snack || 10}
+                      onChange={e => setMealSplit(p => ({ ...p, snack: +e.target.value }))}
+                      style={{ width: '100%', accentColor: 'var(--primary)' }} />
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      ≈ {Math.round((client.targets?.calories || 2000) * (mealSplit.snack || 10) / 100)} kcal
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={saveMealSplit} disabled={savingMealSplit}>
+                {savingMealSplit ? 'Enregistrement...' : '✅ Enregistrer le découpage'}
+              </button>
+            </div>
+
+            {/* Aliments personnalisés */}
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>➕ Aliments personnalisés</div>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setShowAddFood(!showAddFood)}>
+                  {showAddFood ? 'Annuler' : '+ Ajouter'}
+                </button>
+              </div>
+
+              {/* Liste des aliments custom */}
+              {Object.entries(customFoods).map(([macro, foods]) =>
+                foods.length > 0 ? (
+                  <div key={macro} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>
+                      {macro === 'protein' ? '🥩 Protéines' : macro === 'carbs' ? '🍚 Glucides' : '🥑 Lipides'}
+                    </div>
+                    {foods.map((f, i) => (
+                      <div key={i} style={{ fontSize: 13, padding: '4px 8px', background: 'var(--bg)', borderRadius: 6, marginBottom: 4 }}>
+                        {f.emoji} {f.name} — {f.visual}
+                      </div>
+                    ))}
+                  </div>
+                ) : null
+              )}
+              {Object.values(customFoods).every(arr => arr.length === 0) && !showAddFood && (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Aucun aliment personnalisé pour ce client.</p>
+              )}
+
+              {showAddFood && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, padding: 14, background: 'var(--bg)', borderRadius: 10 }}>
+                  <div className="input-group">
+                    <label className="input-label">Macro</label>
+                    <select className="input" value={newFood.macro} onChange={e => setNewFood(p => ({ ...p, macro: e.target.value }))}>
+                      <option value="protein">🥩 Protéines</option>
+                      <option value="carbs">🍚 Glucides</option>
+                      <option value="fat">🥑 Lipides</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="input-group">
+                      <label className="input-label">Nom</label>
+                      <input className="input" value={newFood.name} onChange={e => setNewFood(p => ({ ...p, name: e.target.value }))} placeholder="Ex: Cottage cheese" />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Emoji</label>
+                      <input className="input" value={newFood.emoji} onChange={e => setNewFood(p => ({ ...p, emoji: e.target.value }))} />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Unité</label>
+                      <select className="input" value={newFood.unit} onChange={e => setNewFood(p => ({ ...p, unit: e.target.value }))}>
+                        <option value="g">g</option>
+                        <option value="c.s.">c.s.</option>
+                        <option value="c.à.c">c.à.c</option>
+                        <option value="unité">unité</option>
+                        <option value="tranche">tranche</option>
+                      </select>
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">g par unité</label>
+                      <input className="input" type="number" value={newFood.gramsPerUnit} onChange={e => setNewFood(p => ({ ...p, gramsPerUnit: +e.target.value }))} />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">
+                        {newFood.macro === 'protein' ? 'Prot/100g' : newFood.macro === 'carbs' ? 'Gluc/100g' : 'Lip/100g'}
+                      </label>
+                      <input className="input" type="number" value={newFood.macro === 'protein' ? newFood.protPer100g : newFood.macro === 'carbs' ? newFood.carbsPer100g : newFood.fatPer100g}
+                        onChange={e => setNewFood(p => ({ ...p, [`${newFood.macro === 'protein' ? 'prot' : newFood.macro === 'carbs' ? 'carbs' : 'fat'}Per100g`]: +e.target.value }))}
+                        placeholder="g" />
+                    </div>
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Repère visuel</label>
+                    <input className="input" value={newFood.visual} onChange={e => setNewFood(p => ({ ...p, visual: e.target.value }))} placeholder="Ex: 1 pot = 150g" />
+                  </div>
+                  <button className="btn btn-primary" onClick={saveCustomFood} disabled={!newFood.name}>
+                    ✅ Ajouter cet aliment
+                  </button>
+                </div>
+              )}
+            </div>
+
               <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
                 Ces objectifs s'appliquent à la semaine en cours. La semaine prochaine, il faudra les réactiver (ou les modifier).
               </p>

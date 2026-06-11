@@ -8,6 +8,7 @@ export default function TabBar() {
     { to: '/dashboard', icon: '🏠', label: 'Accueil' },
     { to: '/checkin/daily', icon: '📋', label: 'Suivi' },
     { to: '/checkin/weekly', icon: '📅', label: 'Bilan' },
+    { to: '/mealplan', icon: '🍽️', label: 'Repas' },
     { to: '/progress', icon: '📈', label: 'Progrès' },
     { to: '/profile', icon: '👤', label: 'Profil' },
   ];

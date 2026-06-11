@@ -30,61 +30,62 @@ export default function ClientDashboard() {
   const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
   async function loadData() {
-    const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
-    if (!profileDoc.exists()) { setLoading(false); return; }
-    const p = profileDoc.data();
-    setProfile(p);
+    try {
+      const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+      if (!profileDoc.exists()) { setLoading(false); return; }
+      const p = profileDoc.data();
+      setProfile(p);
 
-    // Check if today is bilan day and not done yet
-    if (p.weeklyBilanDay !== undefined && p.weeklyBilanDay === todayDayOfWeek) {
-      const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey));
-      setWeeklyToday(!weekDoc.exists());
-    }
+      // Lancer tous les appels en parallèle
+      const [
+        weekDoc,
+        todayDoc,
+        entriesSnap,
+        resetDoc,
+        weeklySnap,
+        wgSnap,
+      ] = await Promise.all([
+        (p.weeklyBilanDay !== undefined && p.weeklyBilanDay === todayDayOfWeek)
+          ? getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey))
+          : Promise.resolve(null),
+        getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today)),
+        getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7))),
+        getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey)),
+        getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(1))),
+        getDocs(query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1))),
+      ]);
 
-    // Today entry
-    const todayDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today));
-    if (todayDoc.exists()) setTodayEntry(todayDoc.data());
-
-    // Last 7 days for sparkline
-    const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
-    const snap = await getDocs(q);
-    const entries = snap.docs.map(d => d.data());
-    setRecentEntries([...entries].reverse());
-
-    // Week balance — check for manual reset first
-    const resetDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey));
-    const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
-
-    let totalDiff = 0;
-    for (const e of entries) {
-      if (e.date >= weekKey && e.calories) {
-        const t = await getTargetsForDate(currentUser.uid, e.date, p.targets || {});
-        const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
-        const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
-        const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
-        const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
-        totalDiff += (e.calories - target);
+      if (weekDoc && !weekDoc.exists()) setWeeklyToday(true);
+      if (todayDoc.exists()) {
+        setTodayEntry(todayDoc.data());
+        setTodayGoalChecks(todayDoc.data().goalChecks || null);
       }
+
+      const entries = entriesSnap.docs.map(d => d.data());
+      setRecentEntries([...entries].reverse());
+
+      if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
+      if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
+
+      // Balance calorique (mode tracking uniquement, sans appels Firestore par entrée)
+      if (p.coachingMode !== 'intuitif') {
+        const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
+        const t = p.targets || {};
+        let totalDiff = 0;
+        entries.forEach(e => {
+          if (e.date >= weekKey && e.calories) {
+            const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
+            const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+            const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
+            const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+            totalDiff += (e.calories - target);
+          }
+        });
+        setWeekBalance(Math.round(totalDiff + resetOffset));
+      }
+    } catch (e) {
+      console.error('loadData error:', e);
     }
-    setWeekBalance(Math.round(totalDiff + resetOffset));
-
-    // Dernier bilan hebdo pour les progrès
-    const { collection: col2, query: q2, orderBy: ob2, limit: lim2, getDocs: gd2 } = await import('firebase/firestore');
-    const weeklyQ = q2(col2(db, 'clients', currentUser.uid, 'weeklyEntries'), ob2('weekStart', 'desc'), lim2(1));
-    const weeklySnap = await gd2(weeklyQ);
-    if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
-
-    // Objectifs hebdo
-    const { format: fmt2, startOfWeek: sow2 } = await import('date-fns');
-    const wkKey = fmt2(sow2(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    const { collection: col3, query: q3, orderBy: ob3, limit: lim3, getDocs: gd3 } = await import('firebase/firestore');
-    const wgQ = q3(col3(db, 'clients', currentUser.uid, 'weekGoals'), ob3('weekStart', 'desc'), lim3(1));
-    const wgSnap = await gd3(wgQ);
-    if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
-    // Coches du jour — réutilise todayDoc déjà chargé
-    const todayEntryDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today));
-    if (todayEntryDoc.exists()) setTodayGoalChecks(todayEntryDoc.data().goalChecks || null);
-
     setLoading(false);
   }
 

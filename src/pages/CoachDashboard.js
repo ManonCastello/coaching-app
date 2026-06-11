@@ -120,6 +120,7 @@ export default function CoachDashboard() {
                     {client.firstName} {(client.lastName || '').toUpperCase()}
                     {client.id === currentUser.uid && <span style={{ fontSize: 11, background: 'var(--primary-bg)', color: 'var(--primary)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>Moi</span>}
                     {client.formule && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 100, background: client.formule === 'platinium' ? 'var(--primary-bg)' : 'var(--warning-light)', color: client.formule === 'platinium' ? 'var(--primary)' : 'var(--warning)', fontWeight: 600 }}>{client.formule === 'platinium' ? '💎' : '🥇'}</span>}
+                    <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 100, background: 'var(--border-light)', color: 'var(--text-muted)', fontWeight: 600 }}>{client.coachingMode === 'intuitif' ? '🎯' : '📊'}</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                     {client.lastEntry ? `${client.lastEntry.calories || '—'} kcal · ${(client.lastEntry.steps || 0).toLocaleString()} pas` : 'Pas de suivi aujourd\'hui'}

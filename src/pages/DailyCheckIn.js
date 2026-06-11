@@ -4,11 +4,24 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, serverTimestamp } from 'firebase/firestore';
-import { format, subDays, parseISO } from 'date-fns';
+import { format, subDays, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
+
+const MEALS = [
+  { key: 'morning', label: 'Matin', emoji: '🌅' },
+  { key: 'lunch', label: 'Midi', emoji: '☀️' },
+  { key: 'dinner', label: 'Soir', emoji: '🌙' },
+];
+
+const GOAL_TYPES = [
+  { key: 'protein', label: 'Protéines ≥ 30g', desc: 'Au moins 30g de protéines', emoji: '🥩', snackLabel: 'Collation ≥ 15g' },
+  { key: 'vegetables', label: 'Légumes ≥ 250g', desc: '250 à 300g de légumes', emoji: '🥦', mealsOnly: ['lunch', 'dinner'] },
+  { key: 'fruits', label: '2 fruits min.', desc: '2 fruits dans la journée', emoji: '🍎', dayOnly: true },
+  { key: 'junkfood', label: 'Malbouffe', desc: 'Calories malbouffe du jour', emoji: '🍕', caloriesOnly: true },
+];
 
 export default function DailyCheckIn({ coachMode }) {
   const { currentUser } = useAuth();
@@ -18,13 +31,14 @@ export default function DailyCheckIn({ coachMode }) {
   const [saved, setSaved] = useState(false);
   const [profile, setProfile] = useState(null);
   const [existing, setExisting] = useState(null);
-  // Allow navigating to past days
+  const [weekGoals, setWeekGoals] = useState(null); // objectifs coach actifs
   const [dayOffset, setDayOffset] = useState(0);
 
   const targetDate = format(subDays(new Date(), dayOffset), 'yyyy-MM-dd');
   const dateLabel = format(subDays(new Date(), dayOffset), "EEEE d MMMM", { locale: fr });
   const isToday = dayOffset === 0;
 
+  // Form tracking mode
   const [form, setForm] = useState({
     weight: '', steps: '', calories: '',
     protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '',
@@ -33,19 +47,42 @@ export default function DailyCheckIn({ coachMode }) {
     notes: '',
   });
 
-  function set(key, val) { setForm(p => ({ ...p, [key]: val })); }
+  // Form intuitif mode — coches par repas
+  const [goalChecks, setGoalChecks] = useState({
+    // protein: { morning: false, lunch: false, dinner: false, snack: false }
+    // vegetables: { lunch: false, dinner: false }
+    // fruits: { done: false }
+    // junkfood: { calories: '' }
+  });
 
-  // Weekly calorie balance
+  function set(key, val) { setForm(p => ({ ...p, [key]: val })); }
+  function setCheck(goalKey, mealKey, val) {
+    setGoalChecks(p => ({ ...p, [goalKey]: { ...(p[goalKey] || {}), [mealKey]: val } }));
+  }
+
   const [weekBalance, setWeekBalance] = useState(null);
 
   useEffect(() => {
     async function load() {
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+      let profileData = null;
       if (profileDoc.exists()) {
         const p = profileDoc.data();
-        // Use targets valid for the selected date
         const historicalTargets = await getTargetsForDate(currentUser.uid, targetDate, p.targets || {});
-        setProfile({ ...p, targets: historicalTargets });
+        profileData = { ...p, targets: historicalTargets };
+        setProfile(profileData);
+      }
+
+      // Charger les objectifs hebdo actifs
+      const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const goalsDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weekGoals', weekKey));
+      if (!goalsDoc.exists()) {
+        // Chercher les derniers objectifs actifs
+        const goalsQ = query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
+        const goalsSnap = await getDocs(goalsQ);
+        if (!goalsSnap.empty) setWeekGoals(goalsSnap.docs[0].data());
+      } else {
+        setWeekGoals(goalsDoc.data());
       }
 
       const entryDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate));
@@ -53,32 +90,27 @@ export default function DailyCheckIn({ coachMode }) {
         const data = entryDoc.data();
         setExisting(data);
         setForm({
-          weight: data.weight || '',
-          steps: data.steps || '',
-          calories: data.calories || '',
-          protein: data.protein || '',
-          carbs: data.carbs || '',
-          fat: data.fat || '',
-          sleep: data.sleep || '',
-          sleepQuality: data.sleepQuality || '',
+          weight: data.weight || '', steps: data.steps || '',
+          calories: data.calories || '', protein: data.protein || '',
+          carbs: data.carbs || '', fat: data.fat || '',
+          sleep: data.sleep || '', sleepQuality: data.sleepQuality || '',
           didProgramSession: data.didProgramSession ?? null,
-          extraActivity: data.extraActivity || '',
-          extraActivityCal: data.extraActivityCal || '',
+          extraActivity: data.extraActivity || '', extraActivityCal: data.extraActivityCal || '',
           notes: data.notes || '',
         });
+        if (data.goalChecks) setGoalChecks(data.goalChecks);
       } else {
         setExisting(null);
         setForm({ weight: '', steps: '', calories: '', protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '', didProgramSession: null, extraActivity: '', extraActivityCal: '', notes: '' });
+        setGoalChecks({});
       }
 
-      // Load week balance (last 7 days)
-      const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
-      const snap = await getDocs(q);
-      const entries = snap.docs.map(d => d.data());
-      setLoading(false);
-
-      if (profileDoc.exists()) {
-        const t = profileDoc.data().targets || {};
+      // Balance calorique (mode tracking uniquement)
+      if (profileData?.coachingMode !== 'intuitif') {
+        const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
+        const snap = await getDocs(q);
+        const entries = snap.docs.map(d => d.data());
+        const t = profileData?.targets || {};
         let totalDiff = 0;
         entries.forEach(e => {
           if (e.calories) {
@@ -91,6 +123,8 @@ export default function DailyCheckIn({ coachMode }) {
         });
         setWeekBalance(Math.round(totalDiff));
       }
+
+      setLoading(false);
     }
     load();
   }, [currentUser.uid, targetDate]);
@@ -112,6 +146,7 @@ export default function DailyCheckIn({ coachMode }) {
         extraActivity: form.extraActivity,
         extraActivityCal: form.extraActivityCal ? +form.extraActivityCal : 0,
         notes: form.notes,
+        goalChecks,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setSaved(true);
@@ -119,19 +154,39 @@ export default function DailyCheckIn({ coachMode }) {
         if (coachMode) navigate('/coach');
         else navigate('/dashboard');
       }, 1200);
-    } catch {}
+    } catch(e) { console.error(e); }
     setSaving(false);
   }
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
 
   const targets = profile?.targets || {};
+  const isIntuitif = profile?.coachingMode === 'intuitif';
   const stepBonus = form.steps ? Math.round(((+form.steps - (targets.steps || 10000)) / 1000) * (targets.kcalPer1000Steps || 20)) : 0;
   const sessionAdj = form.didProgramSession === false ? -(targets.sessionCalorieDeficit || 300) : 0;
   const extraCal = form.extraActivityCal ? +form.extraActivityCal : 0;
   const adjustedTarget = (targets.calories || 2000) + stepBonus + sessionAdj + extraCal;
-
   const backUrl = coachMode ? '/coach' : '/dashboard';
+
+  // Compter les coches du jour (mode intuitif)
+  function countChecks() {
+    if (!weekGoals?.goals) return { done: 0, total: 0 };
+    let done = 0, total = 0;
+    weekGoals.goals.forEach(g => {
+      if (!g.active) return;
+      if (g.key === 'fruits') { total++; if (goalChecks?.fruits?.done) done++; }
+      else if (g.key === 'junkfood') { /* pas une coche */ }
+      else if (g.key === 'protein') {
+        MEALS.forEach(m => { total++; if (goalChecks?.protein?.[m.key]) done++; });
+        if (g.includeSnack) { total++; if (goalChecks?.protein?.snack) done++; }
+      }
+      else if (g.key === 'vegetables') {
+        ['lunch', 'dinner'].forEach(m => { total++; if (goalChecks?.vegetables?.[m]) done++; });
+      }
+    });
+    return { done, total };
+  }
+  const checks = countChecks();
 
   return (
     <div className="app-shell">
@@ -152,8 +207,8 @@ export default function DailyCheckIn({ coachMode }) {
           <button onClick={() => setDayOffset(d => Math.max(0, d - 1))} disabled={isToday} style={{ background: 'none', border: 'none', fontSize: 20, cursor: isToday ? 'default' : 'pointer', color: isToday ? 'var(--border)' : 'var(--text-muted)' }}>→</button>
         </div>
 
-        {/* Week balance */}
-        {weekBalance !== null && (
+        {/* Balance calorique — mode tracking uniquement */}
+        {!isIntuitif && weekBalance !== null && (
           <div style={{
             background: weekBalance > 0 ? 'var(--warning-light)' : weekBalance < -200 ? 'var(--success-light)' : 'var(--primary-bg)',
             border: `1px solid ${weekBalance > 0 ? 'var(--warning)' : weekBalance < -200 ? 'var(--success)' : 'var(--primary-light)'}`,
@@ -167,6 +222,21 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
+        {/* Résumé objectifs du jour — mode intuitif */}
+        {isIntuitif && weekGoals?.goals?.some(g => g.active) && (
+          <div style={{
+            background: checks.total > 0 && checks.done === checks.total ? 'var(--success-light)' : 'var(--primary-bg)',
+            border: `1px solid ${checks.total > 0 && checks.done === checks.total ? 'var(--success)' : 'var(--primary-light)'}`,
+            borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 20,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Objectifs du jour</span>
+            <span style={{ fontWeight: 800, fontSize: 16, color: checks.done === checks.total && checks.total > 0 ? 'var(--success)' : 'var(--primary)' }}>
+              {checks.done}/{checks.total} ✓
+            </span>
+          </div>
+        )}
+
         {saved && <div className="alert alert-success">✅ Suivi enregistré !</div>}
         {existing && !saved && (
           <div style={{ background: 'var(--primary-bg)', border: '1px solid var(--primary-light)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--primary)' }}>
@@ -174,7 +244,7 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
-        {/* Weight */}
+        {/* Poids */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>⚖️ Poids</div>
           <div className="input-group">
@@ -183,7 +253,7 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         </div>
 
-        {/* Steps */}
+        {/* Pas */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>👟 Pas</div>
           <div className="input-group">
@@ -202,7 +272,7 @@ export default function DailyCheckIn({ coachMode }) {
           )}
         </div>
 
-        {/* Session programme */}
+        {/* Séance */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>🏋️ Séance programme</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
@@ -220,14 +290,14 @@ export default function DailyCheckIn({ coachMode }) {
               }}>{opt.label}</button>
             ))}
           </div>
-          {form.didProgramSession === false && (
+          {!isIntuitif && form.didProgramSession === false && (
             <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8, fontWeight: 600 }}>
               ⚠️ -{targets.sessionCalorieDeficit || 300} kcal sur la semaine
             </p>
           )}
         </div>
 
-        {/* Extra activity */}
+        {/* Activité bonus */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>🏃 Activité bonus</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -235,88 +305,195 @@ export default function DailyCheckIn({ coachMode }) {
               <label className="input-label">Activité (optionnel)</label>
               <input className="input" value={form.extraActivity} onChange={e => set('extraActivity', e.target.value)} placeholder="Ex: 45 min de vélo, natation..." />
             </div>
-            <div className="input-group">
-              <label className="input-label">Calories brûlées estimées par ta coach (kcal)</label>
-              <input className="input" type="number" value={form.extraActivityCal} onChange={e => set('extraActivityCal', e.target.value)} placeholder="Ex: 250" />
-            </div>
+            {!isIntuitif && (
+              <div className="input-group">
+                <label className="input-label">Calories brûlées estimées par ta coach (kcal)</label>
+                <input className="input" type="number" value={form.extraActivityCal} onChange={e => set('extraActivityCal', e.target.value)} placeholder="Ex: 250" />
+              </div>
+            )}
           </div>
-          {form.extraActivityCal && (
+          {!isIntuitif && form.extraActivityCal && (
             <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 8, fontWeight: 600 }}>
               ✅ +{form.extraActivityCal} kcal à manger en plus
             </p>
           )}
         </div>
 
-        {/* Calories & Macros */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>🍽️ Alimentation</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="input-group">
+        {/* ───── MODE TRACKING ───── */}
+        {!isIntuitif && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>🍽️ Alimentation</div>
+            <div className="input-group" style={{ marginBottom: 14 }}>
               <label className="input-label">Calories consommées (kcal)</label>
               <input className="input" type="number" value={form.calories} onChange={e => set('calories', e.target.value)} placeholder={`Objectif ajusté : ${adjustedTarget} kcal`} />
             </div>
-          </div>
-          {form.calories && (
-            <div style={{ marginTop: 10, marginBottom: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                <span>{form.calories} kcal</span>
-                <span>/ {adjustedTarget} kcal</span>
+            {form.calories && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                  <span>{form.calories} kcal</span><span>/ {adjustedTarget} kcal</span>
+                </div>
+                <div className="progress-bar">
+                  <div className="progress-fill" style={{ width: `${Math.min(100, (+form.calories / adjustedTarget) * 100)}%` }} />
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
+                  <span>Base: {targets.calories}</span>
+                  {stepBonus !== 0 && <span style={{ color: stepBonus > 0 ? 'var(--success)' : 'var(--danger)' }}>Pas: {stepBonus > 0 ? '+' : ''}{stepBonus}</span>}
+                  {extraCal > 0 && <span style={{ color: 'var(--success)' }}>Activité: +{extraCal}</span>}
+                  {sessionAdj !== 0 && <span style={{ color: 'var(--danger)' }}>Séance: {sessionAdj}</span>}
+                </div>
               </div>
-              <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${Math.min(100, (+form.calories / adjustedTarget) * 100)}%` }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
-                <span>Base: {targets.calories}</span>
-                {stepBonus !== 0 && <span style={{ color: stepBonus > 0 ? 'var(--success)' : 'var(--danger)' }}>Pas: {stepBonus > 0 ? '+' : ''}{stepBonus}</span>}
-                {extraCal > 0 && <span style={{ color: 'var(--success)' }}>Activité: +{extraCal}</span>}
-                {sessionAdj !== 0 && <span style={{ color: 'var(--danger)' }}>Séance: {sessionAdj}</span>}
-              </div>
-            </div>
-          )}
-          <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Macros — recommandé
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { key: 'protein', label: 'Protéines', color: '#F59E0B', target: targets.protein },
-                { key: 'carbs', label: 'Glucides', color: '#EC4899', target: targets.carbs },
-                { key: 'fat', label: 'Lipides', color: '#7C3AED', target: targets.fat },
-              ].map(m => (
-                <div key={m.key}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: m.color }}>{m.label}</label>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Obj: {m.target || '—'} g</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      className="input"
-                      type="number"
-                      value={form[m.key]}
-                      onChange={e => set(m.key, e.target.value)}
-                      placeholder={`g`}
-                      style={{ flex: 1 }}
-                    />
+            )}
+            <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Macros</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[
+                  { key: 'protein', label: 'Protéines', color: '#F59E0B', target: targets.protein },
+                  { key: 'carbs', label: 'Glucides', color: '#EC4899', target: targets.carbs },
+                  { key: 'fat', label: 'Lipides', color: '#7C3AED', target: targets.fat },
+                ].map(m => (
+                  <div key={m.key}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: m.color }}>{m.label}</label>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Obj: {m.target || '—'} g</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input className="input" type="number" value={form[m.key]} onChange={e => set(m.key, e.target.value)} placeholder="g" style={{ flex: 1 }} />
+                      {form[m.key] && m.target && (
+                        <span style={{ fontSize: 12, fontWeight: 700, minWidth: 36, textAlign: 'right', color: +form[m.key] >= m.target * 0.9 ? 'var(--success)' : +form[m.key] >= m.target * 0.7 ? 'var(--warning)' : 'var(--danger)' }}>
+                          {Math.round((+form[m.key] / m.target) * 100)}%
+                        </span>
+                      )}
+                    </div>
                     {form[m.key] && m.target && (
-                      <span style={{ fontSize: 12, fontWeight: 700, minWidth: 36, textAlign: 'right',
-                        color: +form[m.key] >= m.target * 0.9 ? 'var(--success)' : +form[m.key] >= m.target * 0.7 ? 'var(--warning)' : 'var(--danger)'
-                      }}>
-                        {Math.round((+form[m.key] / m.target) * 100)}%
-                      </span>
+                      <div className="progress-bar" style={{ marginTop: 6, height: 5 }}>
+                        <div style={{ height: '100%', borderRadius: 100, background: m.color, width: `${Math.min(100, (+form[m.key] / m.target) * 100)}%`, transition: 'width 0.4s' }} />
+                      </div>
                     )}
                   </div>
-                  {form[m.key] && m.target && (
-                    <div className="progress-bar" style={{ marginTop: 6, height: 5 }}>
-                      <div style={{ height: '100%', borderRadius: 100, background: m.color, width: `${Math.min(100, (+form[m.key] / m.target) * 100)}%`, transition: 'width 0.4s' }} />
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Sleep */}
+        {/* ───── MODE INTUITIF ───── */}
+        {isIntuitif && weekGoals?.goals?.some(g => g.active) && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>🎯 Objectifs du jour</div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Coche ce que tu as respecté à chaque repas.</p>
+
+            {weekGoals.goals.filter(g => g.active).map(goal => {
+              if (goal.key === 'protein') return (
+                <div key="protein" style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 18 }}>🥩</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>Protéines ≥ 30g à chaque repas</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ex : 300g de skyr, 3 œufs + 150g poulet, 200g thon...</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    {MEALS.map(m => (
+                      <button key={m.key} type="button" onClick={() => setCheck('protein', m.key, !goalChecks?.protein?.[m.key])} style={{
+                        padding: '12px 8px', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: `2px solid ${goalChecks?.protein?.[m.key] ? 'var(--success)' : 'var(--border)'}`,
+                        background: goalChecks?.protein?.[m.key] ? 'var(--success-light)' : 'white',
+                        color: goalChecks?.protein?.[m.key] ? 'var(--success)' : 'var(--text-muted)',
+                        fontFamily: 'var(--font-body)', transition: 'all 0.2s', textAlign: 'center',
+                      }}>
+                        {goalChecks?.protein?.[m.key] ? '✅' : '○'}<br />{m.emoji} {m.label}
+                      </button>
+                    ))}
+                  </div>
+                  {goal.includeSnack && (
+                    <button type="button" onClick={() => setCheck('protein', 'snack', !goalChecks?.protein?.snack)} style={{
+                      marginTop: 8, width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      border: `2px solid ${goalChecks?.protein?.snack ? 'var(--success)' : 'var(--border)'}`,
+                      background: goalChecks?.protein?.snack ? 'var(--success-light)' : 'white',
+                      color: goalChecks?.protein?.snack ? 'var(--success)' : 'var(--text-muted)',
+                      fontFamily: 'var(--font-body)', transition: 'all 0.2s',
+                    }}>
+                      {goalChecks?.protein?.snack ? '✅' : '○'} 🍱 Collation ≥ 15g
+                    </button>
+                  )}
+                </div>
+              );
+
+              if (goal.key === 'vegetables') return (
+                <div key="vegetables" style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 18 }}>🥦</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>Légumes ≥ 250g par repas</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Midi et soir — crus ou cuits</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {[{key:'lunch',label:'Midi',emoji:'☀️'},{key:'dinner',label:'Soir',emoji:'🌙'}].map(m => (
+                      <button key={m.key} type="button" onClick={() => setCheck('vegetables', m.key, !goalChecks?.vegetables?.[m.key])} style={{
+                        padding: '12px 8px', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: `2px solid ${goalChecks?.vegetables?.[m.key] ? 'var(--success)' : 'var(--border)'}`,
+                        background: goalChecks?.vegetables?.[m.key] ? 'var(--success-light)' : 'white',
+                        color: goalChecks?.vegetables?.[m.key] ? 'var(--success)' : 'var(--text-muted)',
+                        fontFamily: 'var(--font-body)', transition: 'all 0.2s', textAlign: 'center',
+                      }}>
+                        {goalChecks?.vegetables?.[m.key] ? '✅' : '○'}<br />{m.emoji} {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+
+              if (goal.key === 'fruits') return (
+                <div key="fruits" style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 18 }}>🍎</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>2 fruits minimum dans la journée</div>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setCheck('fruits', 'done', !goalChecks?.fruits?.done)} style={{
+                    width: '100%', padding: '14px', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    border: `2px solid ${goalChecks?.fruits?.done ? 'var(--success)' : 'var(--border)'}`,
+                    background: goalChecks?.fruits?.done ? 'var(--success-light)' : 'white',
+                    color: goalChecks?.fruits?.done ? 'var(--success)' : 'var(--text-muted)',
+                    fontFamily: 'var(--font-body)', transition: 'all 0.2s',
+                  }}>
+                    {goalChecks?.fruits?.done ? '✅ Objectif atteint !' : '○ Pas encore atteint'}
+                  </button>
+                </div>
+              );
+
+              if (goal.key === 'junkfood') return (
+                <div key="junkfood" style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 18 }}>🍕</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>Malbouffe du jour</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ta coach estimera d'après tes photos. Entre le nombre de calories ici si tu le sais.</div>
+                    </div>
+                  </div>
+                  <input className="input" type="number" value={goalChecks?.junkfood?.calories || ''} onChange={e => setCheck('junkfood', 'calories', e.target.value)} placeholder="Ex: 350 kcal (optionnel)" />
+                  {goal.maxCalories && goalChecks?.junkfood?.calories && (
+                    <p style={{ fontSize: 12, marginTop: 6, fontWeight: 600, color: +goalChecks.junkfood.calories <= goal.maxCalories ? 'var(--success)' : 'var(--danger)' }}>
+                      {+goalChecks.junkfood.calories <= goal.maxCalories ? `✅ Dans la limite (max ${goal.maxCalories} kcal)` : `⚠️ Au-dessus de la limite (max ${goal.maxCalories} kcal)`}
+                    </p>
+                  )}
+                </div>
+              );
+              return null;
+            })}
+          </div>
+        )}
+
+        {isIntuitif && (!weekGoals || !weekGoals.goals?.some(g => g.active)) && (
+          <div className="card" style={{ marginBottom: 16, textAlign: 'center', padding: 24 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Ta coach n'a pas encore défini d'objectifs pour cette semaine.</p>
+          </div>
+        )}
+
+        {/* Sommeil */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>😴 Sommeil</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -352,8 +529,7 @@ export default function DailyCheckIn({ coachMode }) {
         </button>
       </div>
 
-{!coachMode && <TabBar />}
+      {!coachMode && <TabBar />}
     </div>
   );
 }
-// TabBar already imported via module

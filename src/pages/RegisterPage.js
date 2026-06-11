@@ -44,6 +44,7 @@ export default function RegisterPage() {
     stepGoal: 10000, sleepGoal: 8, sessionsPerWeek: 3,
     reminderHour: '20', reminderMinute: '00',
     weeklyBilanDay: 1,
+    coachingMode: 'tracking', // 'tracking' | 'intuitif'
     // Départ
     startWaist: '', startHips: '', startGlutes: '', startThighs: '', startArms: '',
   });
@@ -145,6 +146,7 @@ export default function RegisterPage() {
         },
         reminderTime: `${form.reminderHour}:${form.reminderMinute}`,
         weeklyBilanDay: +form.weeklyBilanDay,
+        coachingMode: form.coachingMode || 'tracking',
         createdAt: serverTimestamp(),
       });
       navigate('/dashboard');
@@ -273,6 +275,26 @@ export default function RegisterPage() {
       {/* ÉTAPE 3 — Objectifs */}
       {step === 3 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Mode de suivi */}
+          <div className="input-group">
+            <label className="input-label">Comment tu veux suivre ton alimentation ?</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[
+                { value: 'tracking', label: '📊 Avec comptage', desc: 'Tu notes tes calories et macros dans MyFitnessPal chaque jour.' },
+                { value: 'intuitif', label: '🎯 Sans comptage', desc: "Tu suis des objectifs par repas fixés par ta coach — sans compter les calories." },
+              ].map(opt => (
+                <button key={opt.value} type="button" onClick={() => set('coachingMode', opt.value)} style={{
+                  padding: '14px 16px', borderRadius: 'var(--radius-sm)', textAlign: 'left', cursor: 'pointer',
+                  border: `2px solid ${form.coachingMode === opt.value ? 'var(--primary)' : 'var(--border)'}`,
+                  background: form.coachingMode === opt.value ? 'var(--primary-bg)' : 'white',
+                  fontFamily: 'var(--font-body)', transition: 'all 0.2s',
+                }}>
+                  <div style={{ fontWeight: 700, color: form.coachingMode === opt.value ? 'var(--primary)' : 'var(--text)' }}>{opt.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="input-group">
             <label className="input-label">Objectif</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

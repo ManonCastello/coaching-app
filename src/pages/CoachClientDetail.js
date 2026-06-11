@@ -38,6 +38,14 @@ export default function CoachClientDetail() {
   const [reminderHour, setReminderHour] = useState('20');
   const [reminderMin, setReminderMin] = useState('00');
   const [bilanDay, setBilanDay] = useState(1);
+  const [weekGoals, setWeekGoals] = useState(null);
+  const [savingGoals, setSavingGoals] = useState(false);
+  const [goalsForm, setGoalsForm] = useState({
+    protein: { active: false, includeSnack: false },
+    vegetables: { active: false },
+    fruits: { active: false },
+    junkfood: { active: false, maxCalories: 300 },
+  });
 
 
   function setT(key, val) { setTargets(p => ({ ...p, [key]: val })); }
@@ -62,6 +70,17 @@ export default function CoachClientDetail() {
       const weeklyQ = query(collection(db, 'clients', clientId, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(12));
       const weeklySnap = await getDocs(weeklyQ);
       setWeeklyEntries(weeklySnap.docs.map(d => d.data()).reverse());
+      // Charger objectifs hebdo
+      const wgQ = query(collection(db, 'clients', clientId, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
+      const wgSnap = await getDocs(wgQ);
+      if (!wgSnap.empty) {
+        const wgData = wgSnap.docs[0].data();
+        setWeekGoals(wgData);
+        // Pré-remplir le formulaire avec les derniers objectifs
+        const gf = {};
+        (wgData.goals || []).forEach(g => { gf[g.key] = { ...g }; });
+        if (Object.keys(gf).length) setGoalsForm(prev => ({ ...prev, ...gf }));
+      }
       setLoading(false);
     }
     load();
@@ -194,6 +213,25 @@ export default function CoachClientDetail() {
     await updateDoc(doc(db, 'clients', clientId), { startWeight: startForm.weight ? +startForm.weight : null, startMeasurements, startPhotos });
     setClient(p => ({ ...p, startWeight: +startForm.weight, startMeasurements, startPhotos }));
     setEditStartData(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveWeekGoals() {
+    setSavingGoals(true);
+    const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const goals = Object.entries(goalsForm).map(([key, val]) => ({ key, ...val }));
+    await setDoc(doc(db, 'clients', clientId, 'weekGoals', weekKey), {
+      weekStart: weekKey,
+      goals,
+      updatedAt: serverTimestamp(),
+    });
+    setWeekGoals({ weekStart: weekKey, goals });
+    setSavingGoals(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveCoachingMode(mode) {
+    await updateDoc(doc(db, 'clients', clientId), { coachingMode: mode });
+    setClient(p => ({ ...p, coachingMode: mode }));
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
   async function saveReminder() {
@@ -670,60 +708,187 @@ export default function CoachClientDetail() {
 
         {/* TARGETS */}
         {activeTab === 'targets' && (
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editTargets ? 20 : 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>🎯 Objectifs</div>
-              <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditTargets(!editTargets)}>
-                {editTargets ? 'Annuler' : 'Modifier'}
-              </button>
-            </div>
-            {!editTargets ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Mode de coaching */}
+            <div className="card">
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📱 Mode de suivi</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  { label: '🔥 Calories', value: `${targets.calories || '—'} kcal` },
-                  { label: '🥩 Protéines', value: `${targets.protein || '—'} g` },
-                  { label: '🌾 Glucides', value: `${targets.carbs || '—'} g` },
-                  { label: '🥑 Lipides', value: `${targets.fat || '—'} g` },
-                  { label: '👟 Pas', value: (targets.steps || 10000).toLocaleString() },
-                  { label: '😴 Sommeil', value: `${targets.sleep || 8} h` },
-                  { label: '🏋️ Séances/sem', value: targets.sessionsPerWeek || 3 },
-                  { label: '⚡ kcal/1000 pas', value: `${targets.kcalPer1000Steps || 20} kcal` },
-                  { label: '📉 Déficit séance', value: `${targets.sessionCalorieDeficit || 300} kcal` },
-                ].map(r => (
-                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-light)', fontSize: 13 }}>
-                    <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>
-                    <span style={{ fontWeight: 700 }}>{r.value}</span>
-                  </div>
+                  { value: 'tracking', label: '📊 Avec comptage', desc: 'Calories + macros via MyFitnessPal' },
+                  { value: 'intuitif', label: '🎯 Sans comptage', desc: 'Objectifs par repas, sans compter les calories' },
+                ].map(opt => (
+                  <button key={opt.value} type="button" onClick={() => saveCoachingMode(opt.value)} style={{
+                    padding: '12px 16px', borderRadius: 'var(--radius-sm)', textAlign: 'left', cursor: 'pointer',
+                    border: `2px solid ${client.coachingMode === opt.value ? 'var(--primary)' : 'var(--border)'}`,
+                    background: client.coachingMode === opt.value ? 'var(--primary-bg)' : 'white',
+                    fontFamily: 'var(--font-body)', transition: 'all 0.2s',
+                  }}>
+                    <div style={{ fontWeight: 700, color: client.coachingMode === opt.value ? 'var(--primary)' : 'var(--text)', fontSize: 13 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{opt.desc}</div>
+                  </button>
                 ))}
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            </div>
+
+            {/* Objectifs calories/macros (mode tracking) */}
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editTargets ? 20 : 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>🔢 Objectifs calories & macros</div>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditTargets(!editTargets)}>
+                  {editTargets ? 'Annuler' : 'Modifier'}
+                </button>
+              </div>
+              {!editTargets ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {[
-                    { key: 'calories', label: '🔥 Calories' },
-                    { key: 'protein', label: '🥩 Protéines (g)' },
-                    { key: 'carbs', label: '🌾 Glucides (g)' },
-                    { key: 'fat', label: '🥑 Lipides (g)' },
-                    { key: 'steps', label: '👟 Pas/jour' },
-                    { key: 'sleep', label: '😴 Sommeil (h)' },
-                    { key: 'sessionsPerWeek', label: '🏋️ Séances/sem' },
-                    { key: 'kcalPer1000Steps', label: '⚡ kcal/1000 pas' },
-                    { key: 'sessionCalorieDeficit', label: '📉 Déficit séance' },
-                  ].map(f => (
-                    <div key={f.key} className="input-group">
-                      <label className="input-label" style={{ fontSize: 11 }}>{f.label}</label>
-                      <input className="input" type="number" value={targets[f.key] || ''} onChange={e => setT(f.key, e.target.value)} />
+                    { label: '🔥 Calories', value: `${targets.calories || '—'} kcal` },
+                    { label: '🥩 Protéines', value: `${targets.protein || '—'} g` },
+                    { label: '🌾 Glucides', value: `${targets.carbs || '—'} g` },
+                    { label: '🥑 Lipides', value: `${targets.fat || '—'} g` },
+                    { label: '👟 Pas', value: (targets.steps || 10000).toLocaleString() },
+                    { label: '😴 Sommeil', value: `${targets.sleep || 8} h` },
+                    { label: '🏋️ Séances/sem', value: targets.sessionsPerWeek || 3 },
+                    { label: '⚡ kcal/1000 pas', value: `${targets.kcalPer1000Steps || 20} kcal` },
+                    { label: '📉 Déficit séance', value: `${targets.sessionCalorieDeficit || 300} kcal` },
+                  ].map(r => (
+                    <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-light)', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>
+                      <span style={{ fontWeight: 700 }}>{r.value}</span>
                     </div>
                   ))}
                 </div>
-                <button className="btn btn-primary" onClick={saveTargets} disabled={saving}>
-                  {saving ? 'Enregistrement...' : '✅ Enregistrer'}
-                </button>
-                <button className="btn btn-secondary" onClick={resetWeekBalance} style={{ marginTop: 4 }}>
-                  🔄 Remettre la balance semaine à zéro
-                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {[
+                      { key: 'calories', label: '🔥 Calories' },
+                      { key: 'protein', label: '🥩 Protéines (g)' },
+                      { key: 'carbs', label: '🌾 Glucides (g)' },
+                      { key: 'fat', label: '🥑 Lipides (g)' },
+                      { key: 'steps', label: '👟 Pas/jour' },
+                      { key: 'sleep', label: '😴 Sommeil (h)' },
+                      { key: 'sessionsPerWeek', label: '🏋️ Séances/sem' },
+                      { key: 'kcalPer1000Steps', label: '⚡ kcal/1000 pas' },
+                      { key: 'sessionCalorieDeficit', label: '📉 Déficit séance' },
+                    ].map(f => (
+                      <div key={f.key} className="input-group">
+                        <label className="input-label" style={{ fontSize: 11 }}>{f.label}</label>
+                        <input className="input" type="number" value={targets[f.key] || ''} onChange={e => setT(f.key, e.target.value)} />
+                      </div>
+                    ))}
+                  </div>
+                  <button className="btn btn-primary" onClick={saveTargets} disabled={saving}>
+                    {saving ? 'Enregistrement...' : '✅ Enregistrer'}
+                  </button>
+                  <button className="btn btn-secondary" onClick={resetWeekBalance}>
+                    🔄 Remettre la balance semaine à zéro
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Objectifs hebdo intuitifs */}
+            <div className="card">
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🎯 Objectifs hebdo (mode sans comptage)</div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Active les objectifs de cette semaine. Ils s'affichent dans le suivi quotidien du client sous forme de cases à cocher par repas.
+              </p>
+
+              {/* Protéines */}
+              <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: goalsForm.protein.active ? 10 : 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 20 }}>🥩</span>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>Protéines ≥ 30g à chaque repas</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Matin, midi, soir</div>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setGoalsForm(p => ({ ...p, protein: { ...p.protein, active: !p.protein.active } }))} style={{
+                    padding: '6px 14px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: goalsForm.protein.active ? 'var(--primary)' : 'var(--border-light)',
+                    color: goalsForm.protein.active ? 'white' : 'var(--text-muted)',
+                    fontFamily: 'var(--font-body)',
+                  }}>{goalsForm.protein.active ? '✅ Actif' : 'Inactif'}</button>
+                </div>
+                {goalsForm.protein.active && (
+                  <button type="button" onClick={() => setGoalsForm(p => ({ ...p, protein: { ...p.protein, includeSnack: !p.protein.includeSnack } }))} style={{
+                    padding: '8px 14px', borderRadius: 'var(--radius-sm)', border: `1.5px solid ${goalsForm.protein.includeSnack ? 'var(--primary)' : 'var(--border)'}`,
+                    background: goalsForm.protein.includeSnack ? 'var(--primary-bg)' : 'white', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 600, color: goalsForm.protein.includeSnack ? 'var(--primary)' : 'var(--text-muted)',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    {goalsForm.protein.includeSnack ? '✅' : '○'} Inclure collation ≥ 15g
+                  </button>
+                )}
               </div>
-            )}
+
+              {/* Légumes */}
+              <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 20 }}>🥦</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>Légumes ≥ 250g par repas</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Midi et soir</div>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setGoalsForm(p => ({ ...p, vegetables: { ...p.vegetables, active: !p.vegetables.active } }))} style={{
+                  padding: '6px 14px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                  background: goalsForm.vegetables.active ? 'var(--primary)' : 'var(--border-light)',
+                  color: goalsForm.vegetables.active ? 'white' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-body)',
+                }}>{goalsForm.vegetables.active ? '✅ Actif' : 'Inactif'}</button>
+              </div>
+
+              {/* Fruits */}
+              <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 20 }}>🍎</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>2 fruits minimum / jour</div>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setGoalsForm(p => ({ ...p, fruits: { ...p.fruits, active: !p.fruits.active } }))} style={{
+                  padding: '6px 14px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                  background: goalsForm.fruits.active ? 'var(--primary)' : 'var(--border-light)',
+                  color: goalsForm.fruits.active ? 'white' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-body)',
+                }}>{goalsForm.fruits.active ? '✅ Actif' : 'Inactif'}</button>
+              </div>
+
+              {/* Malbouffe */}
+              <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: goalsForm.junkfood.active ? 10 : 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 20 }}>🍕</span>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>Limite malbouffe</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Le client entre ses calories malbouffe</div>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setGoalsForm(p => ({ ...p, junkfood: { ...p.junkfood, active: !p.junkfood.active } }))} style={{
+                    padding: '6px 14px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: goalsForm.junkfood.active ? 'var(--primary)' : 'var(--border-light)',
+                    color: goalsForm.junkfood.active ? 'white' : 'var(--text-muted)',
+                    fontFamily: 'var(--font-body)',
+                  }}>{goalsForm.junkfood.active ? '✅ Actif' : 'Inactif'}</button>
+                </div>
+                {goalsForm.junkfood.active && (
+                  <div className="input-group">
+                    <label className="input-label">Limite max (kcal/jour)</label>
+                    <input className="input" type="number" value={goalsForm.junkfood.maxCalories} onChange={e => setGoalsForm(p => ({ ...p, junkfood: { ...p.junkfood, maxCalories: +e.target.value } }))} placeholder="Ex: 300" />
+                  </div>
+                )}
+              </div>
+
+              <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={saveWeekGoals} disabled={savingGoals}>
+                {savingGoals ? 'Enregistrement...' : '✅ Appliquer pour cette semaine'}
+              </button>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
+                Ces objectifs s'appliquent à la semaine en cours. La semaine prochaine, il faudra les réactiver (ou les modifier).
+              </p>
+            </div>
           </div>
         )}
       </div>

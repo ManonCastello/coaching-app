@@ -20,6 +20,8 @@ export default function ClientDashboard() {
   const [weeklyToday, setWeeklyToday] = useState(false);
   const [weekBalance, setWeekBalance] = useState(null);
   const [lastWeeklyEntry, setLastWeeklyEntry] = useState(null);
+  const [weekGoals, setWeekGoals] = useState(null);
+  const [todayGoalChecks, setTodayGoalChecks] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -71,6 +73,19 @@ export default function ClientDashboard() {
     const weeklyQ = q2(col2(db, 'clients', currentUser.uid, 'weeklyEntries'), ob2('weekStart', 'desc'), lim2(1));
     const weeklySnap = await gd2(weeklyQ);
     if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
+
+    // Objectifs hebdo
+    const { format: fmt2, startOfWeek: sow2 } = await import('date-fns');
+    const wkKey = fmt2(sow2(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const { collection: col3, query: q3, orderBy: ob3, limit: lim3, getDocs: gd3 } = await import('firebase/firestore');
+    const wgQ = q3(col3(db, 'clients', currentUser.uid, 'weekGoals'), ob3('weekStart', 'desc'), lim3(1));
+    const wgSnap = await gd3(wgQ);
+    if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
+    // Coches du jour
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { doc: docRef, getDoc: gdoc } = await import('firebase/firestore');
+    const todayDoc = await gdoc(docRef(db, 'clients', currentUser.uid, 'dailyEntries', todayStr));
+    if (todayDoc.exists()) setTodayGoalChecks(todayDoc.data().goalChecks || null);
 
     setLoading(false);
   }
@@ -126,7 +141,7 @@ export default function ClientDashboard() {
           {userRole === 'coach' && <CoachToggle mode={coachMode} onSwitch={handleToggle} />}
           <Link to="/profile" style={{ textDecoration: 'none' }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 13 }}>
-              {profile.firstName[0]}{profile.lastName[0]}
+              {profile.firstName?.[0]}{profile.lastName?.[0]}
             </div>
           </Link>
         </div>
@@ -198,6 +213,50 @@ export default function ClientDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Bloc objectifs hebdo — mode intuitif */}
+        {profile.coachingMode === 'intuitif' && weekGoals?.goals?.some(g => g.active) && (
+          <>
+            <h2 className="section-title">Objectifs de la semaine</h2>
+            <div className="card" style={{ marginBottom: 20 }}>
+              {weekGoals.goals.filter(g => g.active).map((goal, i, arr) => {
+                let checks = [];
+                let label = '';
+                if (goal.key === 'protein') {
+                  const meals = ['morning', 'lunch', 'dinner'];
+                  if (goal.includeSnack) meals.push('snack');
+                  const done = meals.filter(m => todayGoalChecks?.protein?.[m]).length;
+                  checks = [{ label: `${done}/${meals.length} repas`, done: done === meals.length }];
+                  label = '🥩 Protéines ≥ 30g';
+                } else if (goal.key === 'vegetables') {
+                  const done = ['lunch','dinner'].filter(m => todayGoalChecks?.vegetables?.[m]).length;
+                  checks = [{ label: `${done}/2 repas`, done: done === 2 }];
+                  label = '🥦 Légumes ≥ 250g';
+                } else if (goal.key === 'fruits') {
+                  const done = !!todayGoalChecks?.fruits?.done;
+                  checks = [{ label: done ? 'Atteint ✅' : 'Pas encore', done }];
+                  label = '🍎 2 fruits min.';
+                } else if (goal.key === 'junkfood') {
+                  const cal = todayGoalChecks?.junkfood?.calories;
+                  const ok = cal ? +cal <= (goal.maxCalories || 300) : null;
+                  checks = [{ label: cal ? `${cal} kcal${ok ? ' ✅' : ' ⚠️'}` : 'Non renseigné', done: ok }];
+                  label = `🍕 Malbouffe (max ${goal.maxCalories || 300} kcal)`;
+                }
+                return (
+                  <div key={goal.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: checks[0]?.done ? 'var(--success)' : 'var(--text-muted)' }}>{checks[0]?.label}</span>
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 12, textAlign: 'center' }}>
+                <a href="/checkin/daily" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                  ✏️ Compléter mon suivi du jour →
+                </a>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Bloc Mes progrès */}
         {(profile.startWeight || profile.startMeasurements) && (

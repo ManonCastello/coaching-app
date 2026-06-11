@@ -103,6 +103,12 @@ export default function ClientProfile() {
     setUploadingSlot(null);
   }
 
+  async function saveCoachingMode(mode) {
+    await updateDoc(doc(db, 'clients', currentUser.uid), { coachingMode: mode });
+    setProfile(p => ({ ...p, coachingMode: mode }));
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
   async function saveStartData() {
     const startMeasurements = {
       waist: startForm.waist ? +startForm.waist : null,
@@ -236,6 +242,27 @@ export default function ClientProfile() {
             </div>
           )}
         </div>
+        {/* Mode de suivi */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>📱 Mode de suivi</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { value: 'tracking', label: '📊 Avec comptage', desc: 'Tu notes tes calories et macros dans MyFitnessPal.' },
+              { value: 'intuitif', label: '🎯 Sans comptage', desc: 'Tu suis des objectifs par repas — sans compter les calories.' },
+            ].map(opt => (
+              <button key={opt.value} type="button" onClick={() => saveCoachingMode(opt.value)} style={{
+                padding: '12px 16px', borderRadius: 'var(--radius-sm)', textAlign: 'left', cursor: 'pointer',
+                border: `2px solid ${(profile.coachingMode || 'tracking') === opt.value ? 'var(--primary)' : 'var(--border)'}`,
+                background: (profile.coachingMode || 'tracking') === opt.value ? 'var(--primary-bg)' : 'white',
+                fontFamily: 'var(--font-body)', transition: 'all 0.2s',
+              }}>
+                <div style={{ fontWeight: 700, color: (profile.coachingMode || 'tracking') === opt.value ? 'var(--primary)' : 'var(--text)', fontSize: 13 }}>{opt.label}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Mesures de départ */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editStartData ? 16 : 0 }}>

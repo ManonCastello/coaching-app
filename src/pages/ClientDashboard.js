@@ -186,11 +186,14 @@ export default function ClientDashboard() {
         </div>
 
         <div className="stat-grid" style={{ marginBottom: 20 }}>
-          <div className="stat-card">
-            <div className="stat-label">Calories</div>
-            <div className="stat-value">{todayCalories.toLocaleString()}<span className="stat-unit">/ {adjustedCalories.toLocaleString()}</span></div>
-            <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${caloriePct}%` }} /></div>
-          </div>
+          {/* Calories + balance : mode tracking uniquement */}
+          {(profile.coachingMode || 'tracking') !== 'intuitif' && (
+            <div className="stat-card">
+              <div className="stat-label">Calories</div>
+              <div className="stat-value">{todayCalories.toLocaleString()}<span className="stat-unit">/ {adjustedCalories.toLocaleString()}</span></div>
+              <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${caloriePct}%` }} /></div>
+            </div>
+          )}
           <div className="stat-card">
             <div className="stat-label">Pas</div>
             <div className="stat-value">{todaySteps.toLocaleString()}<span className="stat-unit">/ {(targets?.steps || 10000).toLocaleString()}</span></div>
@@ -200,17 +203,19 @@ export default function ClientDashboard() {
             <div className="stat-label">Poids du jour</div>
             <div className="stat-value" style={{ color: 'var(--primary)' }}>{todayWeight || '—'}<span className="stat-unit">kg</span></div>
           </div>
-          {/* Week balance */}
-          <div className="stat-card" style={{ border: `1.5px solid ${balanceColor}20` }}>
-            <div className="stat-label">Balance semaine</div>
-            <div className="stat-value" style={{ color: balanceColor, fontSize: 20 }}>
-              {weekBalance !== null ? `${weekBalance > 0 ? '+' : ''}${weekBalance}` : '—'}
-              <span className="stat-unit">kcal</span>
+          {/* Balance semaine : tracking uniquement */}
+          {(profile.coachingMode || 'tracking') !== 'intuitif' && (
+            <div className="stat-card" style={{ border: `1.5px solid ${balanceColor}20` }}>
+              <div className="stat-label">Balance semaine</div>
+              <div className="stat-value" style={{ color: balanceColor, fontSize: 20 }}>
+                {weekBalance !== null ? `${weekBalance > 0 ? '+' : ''}${weekBalance}` : '—'}
+                <span className="stat-unit">kcal</span>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
+                {weekBalance === null ? '' : weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
+              </div>
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
-              {weekBalance === null ? '' : weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Bloc objectifs hebdo — mode intuitif */}
@@ -335,10 +340,12 @@ export default function ClientDashboard() {
         <h2 className="section-title">Mes objectifs</h2>
         <div className="card" style={{ marginBottom: 20 }}>
           {[
-            { icon: '🔥', label: 'Calories cibles', value: `${targets?.calories || '—'} kcal`, color: 'var(--primary)' },
-            { icon: '🥩', label: 'Protéines', value: `${targets?.protein || '—'} g`, color: '#7C3AED' },
-            { icon: '🌾', label: 'Glucides', value: `${targets?.carbs || '—'} g`, color: '#EC4899' },
-            { icon: '🥑', label: 'Lipides', value: `${targets?.fat || '—'} g`, color: '#F59E0B' },
+            ...(profile.coachingMode !== 'intuitif' ? [
+              { icon: '🔥', label: 'Calories cibles', value: `${targets?.calories || '—'} kcal`, color: 'var(--primary)' },
+              { icon: '🥩', label: 'Protéines', value: `${targets?.protein || '—'} g`, color: '#7C3AED' },
+              { icon: '🌾', label: 'Glucides', value: `${targets?.carbs || '—'} g`, color: '#EC4899' },
+              { icon: '🥑', label: 'Lipides', value: `${targets?.fat || '—'} g`, color: '#F59E0B' },
+            ] : []),
             { icon: '👟', label: 'Pas / jour', value: (targets?.steps || 10000).toLocaleString(), color: 'var(--success)' },
             { icon: '🏋️', label: 'Séances / semaine', value: targets?.sessionsPerWeek || 3, color: 'var(--primary)' },
           ].map(t => (

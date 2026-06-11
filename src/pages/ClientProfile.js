@@ -242,24 +242,22 @@ export default function ClientProfile() {
             </div>
           )}
         </div>
-        {/* Mode de suivi */}
+        {/* Mode de suivi — lecture seule, géré par la coach */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>📱 Mode de suivi</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[
-              { value: 'tracking', label: '📊 Avec comptage', desc: 'Tu notes tes calories et macros dans MyFitnessPal.' },
-              { value: 'intuitif', label: '🎯 Sans comptage', desc: 'Tu suis des objectifs par repas — sans compter les calories.' },
-            ].map(opt => (
-              <button key={opt.value} type="button" onClick={() => saveCoachingMode(opt.value)} style={{
-                padding: '12px 16px', borderRadius: 'var(--radius-sm)', textAlign: 'left', cursor: 'pointer',
-                border: `2px solid ${(profile.coachingMode || 'tracking') === opt.value ? 'var(--primary)' : 'var(--border)'}`,
-                background: (profile.coachingMode || 'tracking') === opt.value ? 'var(--primary-bg)' : 'white',
-                fontFamily: 'var(--font-body)', transition: 'all 0.2s',
-              }}>
-                <div style={{ fontWeight: 700, color: (profile.coachingMode || 'tracking') === opt.value ? 'var(--primary)' : 'var(--text)', fontSize: 13 }}>{opt.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{opt.desc}</div>
-              </button>
-            ))}
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📱 Mon programme</div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Défini par ta coach. Pour le modifier, contacte-la.</p>
+          <div style={{
+            padding: '14px 16px', borderRadius: 'var(--radius-sm)',
+            border: '2px solid var(--primary)', background: 'var(--primary-bg)',
+          }}>
+            <div style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 14 }}>
+              {(profile.coachingMode || 'tracking') === 'intuitif' ? '🎯 Sans comptage de calories' : '📊 Avec comptage des calories'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              {(profile.coachingMode || 'tracking') === 'intuitif'
+                ? 'Tu suis des objectifs par repas définis chaque semaine par ta coach.'
+                : 'Tu notes tes calories et macros dans MyFitnessPal chaque jour.'}
+            </div>
           </div>
         </div>
 

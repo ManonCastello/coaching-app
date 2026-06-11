@@ -1061,10 +1061,6 @@ export default function CoachClientDetail() {
               )}
             </div>
 
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
-                Ces objectifs s'appliquent à la semaine en cours. La semaine prochaine, il faudra les réactiver (ou les modifier).
-              </p>
-            </div>
           </div>
         )}
       </div>

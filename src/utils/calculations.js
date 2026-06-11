@@ -26,7 +26,7 @@ export const WEEK_DAYS = [
 
 export const FORMULES = [
   { value: 'gold', label: '🥇 Gold' },
-  { value: 'platinium', label: '💎 Platinium' },
+  { value: 'platinium', label: '💎 Platinum' },
 ];
 
 export function calculateAgeFromDOB(dob) {

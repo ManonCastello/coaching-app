@@ -2,11 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { format, startOfWeek } from 'date-fns';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES } from '../utils/calculations';
+import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS } from '../utils/calculations';
 import PhotoViewer from '../components/PhotoViewer';
 
 export default function CoachClientDetail() {
@@ -26,6 +26,18 @@ export default function CoachClientDetail() {
   const [editInfo, setEditInfo] = useState(false);
   const [infoForm, setInfoForm] = useState({});
   function setI(key, val) { setInfoForm(p => ({ ...p, [key]: val })); }
+  // Données de départ
+  const [editStartData, setEditStartData] = useState(false);
+  const [startForm, setStartForm] = useState({ weight: '', waist: '', hips: '', glutes: '', thighs: '', arms: '' });
+  const [startPhotos, setStartPhotos] = useState({ face: null, profile: null, back: null });
+  const [uploadingSlot, setUploadingSlot] = useState(null);
+  const fileRefs = { face: React.useRef(), profile: React.useRef(), back: React.useRef() };
+  // Rappel + bilan day
+  const [editReminder, setEditReminder] = useState(false);
+  const [editBilanDay, setEditBilanDay] = useState(false);
+  const [reminderHour, setReminderHour] = useState('20');
+  const [reminderMin, setReminderMin] = useState('00');
+  const [bilanDay, setBilanDay] = useState(1);
 
 
   function setT(key, val) { setTargets(p => ({ ...p, [key]: val })); }
@@ -33,7 +45,17 @@ export default function CoachClientDetail() {
   useEffect(() => {
     async function load() {
       const clientDoc = await getDoc(doc(db, 'clients', clientId));
-      if (clientDoc.exists()) { const data = clientDoc.data(); setClient(data); setTargets(data.targets || {}); setInfoForm({ firstName: data.firstName, lastName: data.lastName, dob: data.dob || '', profession: data.profession || '', weight: data.weight, height: data.height, sex: data.sex, activityLevel: data.activityLevel, goal: data.goal }); }
+      if (clientDoc.exists()) {
+        const data = clientDoc.data();
+        setClient(data);
+        setTargets(data.targets || {});
+        setInfoForm({ firstName: data.firstName, lastName: data.lastName, dob: data.dob || '', profession: data.profession || '', weight: data.weight, height: data.height, sex: data.sex, activityLevel: data.activityLevel, goal: data.goal });
+        setStartForm({ weight: data.startWeight || data.weight || '', waist: data.startMeasurements?.waist || '', hips: data.startMeasurements?.hips || '', glutes: data.startMeasurements?.glutes || '', thighs: data.startMeasurements?.thighs || '', arms: data.startMeasurements?.arms || '' });
+        setStartPhotos(data.startPhotos || { face: null, profile: null, back: null });
+        const [h, m] = (data.reminderTime || '20:00').split(':');
+        setReminderHour(h); setReminderMin(m);
+        setBilanDay(data.weeklyBilanDay ?? 1);
+      }
       const dailyQ = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(30));
       const dailySnap = await getDocs(dailyQ);
       setEntries(dailySnap.docs.map(d => d.data()).reverse());
@@ -137,6 +159,55 @@ export default function CoachClientDetail() {
     setSaving(false);
   }
 
+  async function uploadStartPhoto(file, slot) {
+    const CLOUD = 'dduaqnygn'; const PRESET = 'fitlog_photos';
+    const ln = (client?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
+    const fn = (client?.firstName || '').toLowerCase().replace(/\s/g, '_');
+    const publicId = `fitlog/start/${fn}_${ln}_start_${slot}`;
+    const formData = new FormData();
+    formData.append('file', file); formData.append('upload_preset', PRESET); formData.append('public_id', publicId);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.secure_url) return data.secure_url;
+    throw new Error('Upload failed');
+  }
+
+  async function handleStartPhotoSelect(slot, file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => setStartPhotos(p => ({ ...p, [slot]: e.target.result }));
+    reader.readAsDataURL(file);
+    setUploadingSlot(slot);
+    try { const url = await uploadStartPhoto(file, slot); setStartPhotos(p => ({ ...p, [slot]: url })); }
+    catch (e) { console.error(e); }
+    setUploadingSlot(null);
+  }
+
+  async function saveStartData() {
+    const startMeasurements = {
+      waist: startForm.waist ? +startForm.waist : null,
+      hips: startForm.hips ? +startForm.hips : null,
+      glutes: startForm.glutes ? +startForm.glutes : null,
+      thighs: startForm.thighs ? +startForm.thighs : null,
+      arms: startForm.arms ? +startForm.arms : null,
+    };
+    await updateDoc(doc(db, 'clients', clientId), { startWeight: startForm.weight ? +startForm.weight : null, startMeasurements, startPhotos });
+    setClient(p => ({ ...p, startWeight: +startForm.weight, startMeasurements, startPhotos }));
+    setEditStartData(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveReminder() {
+    await updateDoc(doc(db, 'clients', clientId), { reminderTime: `${reminderHour}:${reminderMin}` });
+    setClient(p => ({ ...p, reminderTime: `${reminderHour}:${reminderMin}` }));
+    setEditReminder(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveBilanDay() {
+    await updateDoc(doc(db, 'clients', clientId), { weeklyBilanDay: +bilanDay });
+    setClient(p => ({ ...p, weeklyBilanDay: +bilanDay }));
+    setEditBilanDay(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
   async function toggleArchive() {
     const newVal = !client.archived;
     await updateDoc(doc(db, 'clients', clientId), { archived: newVal });
@@ -162,8 +233,12 @@ export default function CoachClientDetail() {
   const weightDelta = firstWeight && lastWeight ? Math.round((lastWeight - firstWeight) * 10) / 10 : null;
   const avgCalories = entries.length ? Math.round(entries.reduce((s, e) => s + (e.calories || 0), 0) / entries.length) : 0;
   const avgSteps = entries.length ? Math.round(entries.reduce((s, e) => s + (e.steps || 0), 0) / entries.length) : 0;
-  const sessionsDone = entries.filter(e => e.didProgramSession === true).length;
-  const sessionsTracked = entries.filter(e => e.didProgramSession !== null && e.didProgramSession !== undefined).length;
+  // Séances : compter uniquement lundi-dimanche de la semaine en cours
+  const currentWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const currentWeekEnd = format(new Date(), 'yyyy-MM-dd');
+  const thisWeekEntries = entries.filter(e => e.date >= currentWeekStart && e.date <= currentWeekEnd);
+  const sessionsDone = thisWeekEntries.filter(e => e.didProgramSession === true).length;
+  const sessionsTarget = client.targets?.sessionsPerWeek || 3;
 
   const tabs = [
     { key: 'overview', label: '📊 Vue' },
@@ -176,7 +251,7 @@ export default function CoachClientDetail() {
     <div className="app-shell">
       <div className="top-nav">
         <Link to="/coach" style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
-        <div className="top-nav-title" style={{ fontSize: 15 }}>{client.firstName} {client.lastName}</div>
+        <div className="top-nav-title" style={{ fontSize: 15 }}>{client.firstName} {(client.lastName || '').toUpperCase()}</div>
         <div style={{ width: 24 }} />
       </div>
 
@@ -186,7 +261,7 @@ export default function CoachClientDetail() {
             {client.firstName?.[0]}{client.lastName?.[0]}
           </div>
           <div style={{ flex: 1 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17, margin: 0 }}>{client.firstName} {client.lastName}</h2>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17, margin: 0 }}>{client.firstName} {(client.lastName || '').toUpperCase()}</h2>
             <p style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>{client.profession} · {age ? `${age} ans` : ''} · {client.sex === 'F' ? 'Femme' : 'Homme'}</p>
             <p style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>BMR {bmr || '—'} · TDEE {tdee || '—'} kcal</p>
           </div>
@@ -230,7 +305,7 @@ export default function CoachClientDetail() {
               </div>
               <div className="stat-card"><div className="stat-label">Moy. calories</div><div className="stat-value">{avgCalories}<span className="stat-unit">kcal</span></div></div>
               <div className="stat-card"><div className="stat-label">Moy. pas</div><div className="stat-value" style={{ fontSize: 18 }}>{avgSteps.toLocaleString()}</div></div>
-              <div className="stat-card"><div className="stat-label">Séances</div><div className="stat-value">{sessionsTracked > 0 ? `${sessionsDone}/${sessionsTracked}` : '—'}</div></div>
+              <div className="stat-card"><div className="stat-label">Séances sem.</div><div className="stat-value">{sessionsDone}<span className="stat-unit">/ {sessionsTarget}</span></div></div>
             </div>
 
 
@@ -368,6 +443,150 @@ export default function CoachClientDetail() {
               <button onClick={resetWeekBalance} className="btn btn-secondary">
                 🔄 Remettre la balance à zéro
               </button>
+            </div>
+
+
+            {/* Données de départ */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editStartData ? 16 : 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>📐 Mesures de départ</div>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditStartData(!editStartData)}>
+                  {editStartData ? 'Annuler' : client.startMeasurements ? 'Modifier' : '+ Ajouter'}
+                </button>
+              </div>
+              {!editStartData && (
+                <>
+                  {/* Progression poids */}
+                  {client.startWeight && (() => {
+                    const currentW = lastWeight || null;
+                    const deltaW = currentW ? +(currentW - client.startWeight).toFixed(1) : null;
+                    return (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
+                        <span style={{ fontSize: 13 }}>⚖️ Poids départ</span>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{client.startWeight} kg</span>
+                          {deltaW !== null && <span style={{ fontWeight: 800, fontSize: 13, color: deltaW < 0 ? 'var(--success)' : deltaW > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{deltaW > 0 ? '+' : ''}{deltaW} kg</span>}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {/* Progression mensurations */}
+                  {client.startMeasurements && [
+                    { key: 'waist', label: 'Taille', emoji: '👗' },
+                    { key: 'hips', label: 'Hanches', emoji: '🔵' },
+                    { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+                    { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+                    { key: 'arms', label: 'Bras', emoji: '💪' },
+                  ].map(m => {
+                    const startVal = client.startMeasurements[m.key];
+                    const currentVal = latestWeekly?.measurements?.[m.key];
+                    if (!startVal) return null;
+                    const delta = currentVal ? +(currentVal - startVal).toFixed(1) : null;
+                    return (
+                      <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
+                        <span style={{ fontSize: 13 }}>{m.emoji} {m.label}</span>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{startVal} cm</span>
+                          {delta !== null ? (
+                            <span style={{ fontWeight: 800, fontSize: 13, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{delta > 0 ? '+' : ''}{delta} cm</span>
+                          ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>pas encore de bilan</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Photos de départ */}
+                  {client.startPhotos && (client.startPhotos.face || client.startPhotos.profile || client.startPhotos.back) && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>📸 Photos de départ</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                        {[{key:'face',label:'Face'},{key:'profile',label:'Profil'},{key:'back',label:'Dos'}].map(slot =>
+                          client.startPhotos[slot.key] ? (
+                            <div key={slot.key}>
+                              <img src={client.startPhotos[slot.key]} alt={slot.label} onClick={() => setPhotoViewer({ photoURLs: client.startPhotos, slot: slot.key })} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8, cursor: 'zoom-in' }} />
+                              <p style={{ fontSize: 10, textAlign: 'center', color: 'var(--text-muted)', marginTop: 4 }}>{slot.label}</p>
+                            </div>
+                          ) : null
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {!client.startMeasurements && !client.startWeight && (
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '8px 0' }}>Aucune mesure de départ enregistrée</p>
+                  )}
+                </>
+              )}
+              {editStartData && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="input-group">
+                    <label className="input-label">⚖️ Poids de départ (kg)</label>
+                    <input className="input" type="number" value={startForm.weight} onChange={e => setStartForm(p => ({ ...p, weight: e.target.value }))} step="0.1" placeholder="ex: 65" />
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-muted)' }}>📏 Mensurations de départ (cm)</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {[{key:'waist',label:'Taille',emoji:'👗'},{key:'hips',label:'Hanches',emoji:'🔵'},{key:'glutes',label:'Fesses',emoji:'🍑'},{key:'thighs',label:'Cuisses',emoji:'🦵'},{key:'arms',label:'Bras',emoji:'💪'}].map(m => (
+                      <div key={m.key} className="input-group">
+                        <label className="input-label">{m.emoji} {m.label}</label>
+                        <input className="input" type="number" value={startForm[m.key]} onChange={e => setStartForm(p => ({ ...p, [m.key]: e.target.value }))} placeholder="cm" step="0.5" />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-muted)' }}>📸 Photos de départ</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                    {[{key:'face',label:'Face'},{key:'profile',label:'Profil'},{key:'back',label:'Dos'}].map(slot => (
+                      <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                        <div onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()} style={{ width: '100%', aspectRatio: '3/4', borderRadius: 8, border: `2px dashed ${startPhotos[slot.key] ? 'var(--primary)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', background: 'var(--bg)' }}>
+                          {uploadingSlot === slot.key ? <div className="spinner" style={{ width: 24, height: 24 }} />
+                           : startPhotos[slot.key] ? <img src={startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                           : <div style={{ textAlign: 'center' }}><div style={{ fontSize: 24, color: 'var(--text-light)' }}>+</div><div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</div></div>}
+                        </div>
+                        <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleStartPhotoSelect(slot.key, e.target.files[0])} />
+                        <span style={{ fontSize: 11, color: startPhotos[slot.key] ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>{startPhotos[slot.key] ? '✅ ' : ''}{slot.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="btn btn-primary" onClick={saveStartData} disabled={!!uploadingSlot}>
+                    {uploadingSlot ? 'Upload...' : '✅ Enregistrer les mesures'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Rappel + Bilan day */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>⚙️ Paramètres client</div>
+              {/* Rappel */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editReminder ? 12 : 8 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>🔔 Rappel quotidien</div>
+                  {!editReminder && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{client.reminderTime || '20:00'}</p>}
+                </div>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditReminder(!editReminder)}>{editReminder ? 'Annuler' : 'Modifier'}</button>
+              </div>
+              {editReminder && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+                    <div className="input-group"><label className="input-label">Heure</label><input className="input" type="number" value={reminderHour} onChange={e => setReminderHour(e.target.value.padStart(2,'0'))} min="0" max="23" /></div>
+                    <div className="input-group"><label className="input-label">Minutes</label><input className="input" type="number" value={reminderMin} onChange={e => setReminderMin(e.target.value.padStart(2,'0'))} min="0" max="59" /></div>
+                  </div>
+                  <button className="btn btn-primary btn-sm" style={{ width: 'auto' }} onClick={saveReminder}>Enregistrer</button>
+                </div>
+              )}
+              {/* Bilan day */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: 10, marginBottom: editBilanDay ? 12 : 0 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>📅 Jour du bilan hebdo</div>
+                  {!editBilanDay && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{WEEK_DAYS.find(d => d.value === (client.weeklyBilanDay ?? 1))?.label || 'Lundi'}</p>}
+                </div>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditBilanDay(!editBilanDay)}>{editBilanDay ? 'Annuler' : 'Modifier'}</button>
+              </div>
+              {editBilanDay && (
+                <div style={{ marginTop: 8 }}>
+                  <select className="input" value={bilanDay} onChange={e => setBilanDay(+e.target.value)} style={{ marginBottom: 10 }}>
+                    {WEEK_DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                  <button className="btn btn-primary btn-sm" style={{ width: 'auto' }} onClick={saveBilanDay}>Enregistrer</button>
+                </div>
+              )}
             </div>
 
             {/* Archive / Delete */}

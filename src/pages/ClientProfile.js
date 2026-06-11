@@ -147,11 +147,11 @@ export default function ClientProfile() {
           <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, color: 'white', marginBottom: 12, boxShadow: '0 8px 24px rgba(124,58,237,0.25)' }}>
             {profile.firstName?.[0]}{profile.lastName?.[0]}
           </div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>{profile.firstName} {profile.lastName}</h2>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>{profile.firstName} {(profile.lastName || '').toUpperCase()}</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{profile.profession}</p>
           {profile.formule && (
             <span className={`badge ${profile.formule === 'platinium' ? 'badge-primary' : 'badge-warning'}`} style={{ marginTop: 8 }}>
-              {profile.formule === 'platinium' ? '💎 Platinium' : '🥇 Gold'}
+              {profile.formule === 'platinium' ? '💎 Platinum' : '🥇 Gold'}
             </span>
           )}
         </div>

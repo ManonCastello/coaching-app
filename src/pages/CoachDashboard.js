@@ -117,7 +117,7 @@ export default function CoachDashboard() {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {client.firstName} {client.lastName}
+                    {client.firstName} {(client.lastName || '').toUpperCase()}
                     {client.id === currentUser.uid && <span style={{ fontSize: 11, background: 'var(--primary-bg)', color: 'var(--primary)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>Moi</span>}
                     {client.formule && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 100, background: client.formule === 'platinium' ? 'var(--primary-bg)' : 'var(--warning-light)', color: client.formule === 'platinium' ? 'var(--primary)' : 'var(--warning)', fontWeight: 600 }}>{client.formule === 'platinium' ? '💎' : '🥇'}</span>}
                   </div>

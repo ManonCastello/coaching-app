@@ -22,6 +22,8 @@ export default function ClientDashboard() {
   const [lastWeeklyEntry, setLastWeeklyEntry] = useState(null);
   const [weekGoals, setWeekGoals] = useState(null);
   const [todayGoalChecks, setTodayGoalChecks] = useState(null);
+  const [allEntries, setAllEntries] = useState([]);
+  const [journalLimit, setJournalLimit] = useState(7);
   const [loading, setLoading] = useState(true);
 
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -49,7 +51,7 @@ export default function ClientDashboard() {
           ? getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey))
           : Promise.resolve(null),
         getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today)),
-        getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7))),
+        getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(90))),
         getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey)),
         getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(1))),
         getDocs(query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1))),
@@ -62,7 +64,8 @@ export default function ClientDashboard() {
       }
 
       const entries = entriesSnap.docs.map(d => d.data());
-      setRecentEntries([...entries].reverse());
+      setAllEntries(entries); // desc order pour le journal
+      setRecentEntries([...entries].slice(0, 7).reverse()); // asc order pour le graphique
 
       if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
       if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
@@ -355,6 +358,58 @@ export default function ClientDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Journal quotidien */}
+        {allEntries.length > 0 && (
+          <>
+            <h2 className="section-title">Mon journal</h2>
+            <div className="card" style={{ marginBottom: 20 }}>
+              {allEntries.slice(0, journalLimit).map((entry, i) => (
+                <div key={entry.date} style={{
+                  padding: '12px 0',
+                  borderBottom: i < Math.min(journalLimit, allEntries.length) - 1 ? '1px solid var(--border-light)' : 'none',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>
+                      {new Date(entry.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {entry.didProgramSession === true && <span style={{ fontSize: 11, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>🏋️ Séance</span>}
+                      {entry.didProgramSession === false && <span style={{ fontSize: 11, background: 'var(--danger-light)', color: 'var(--danger)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>❌ Séance</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    {entry.weight && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>⚖️ <strong>{entry.weight} kg</strong></span>}
+                    {entry.steps > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>👟 <strong>{(+entry.steps).toLocaleString()}</strong> pas</span>}
+                    {profile.coachingMode !== 'intuitif' && entry.calories > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🔥 <strong>{entry.calories}</strong> kcal</span>}
+                    {profile.coachingMode !== 'intuitif' && entry.protein > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🥩 <strong>{entry.protein}g</strong> prot</span>}
+                    {entry.sleep && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>😴 <strong>{entry.sleep}h</strong></span>}
+                    {entry.extraActivity && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏃 {entry.extraActivity}</span>}
+                  </div>
+                  {profile.coachingMode === 'intuitif' && entry.goalChecks && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      {entry.goalChecks.protein && ['morning','lunch','dinner'].map(m => entry.goalChecks.protein[m] &&
+                        <span key={m} style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥩 {m === 'morning' ? 'Matin' : m === 'lunch' ? 'Midi' : 'Soir'}</span>
+                      )}
+                      {entry.goalChecks.vegetables?.lunch && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Midi</span>}
+                      {entry.goalChecks.vegetables?.dinner && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Soir</span>}
+                      {entry.goalChecks.fruits?.done && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🍎 Fruits ✅</span>}
+                    </div>
+                  )}
+                  {entry.notes && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>"{entry.notes}"</p>}
+                </div>
+              ))}
+              {allEntries.length > journalLimit && (
+                <button onClick={() => setJournalLimit(l => l + 14)} style={{
+                  width: '100%', padding: '12px', marginTop: 8, background: 'none', border: 'none',
+                  color: 'var(--primary)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)',
+                }}>
+                  Voir plus ({allEntries.length - journalLimit} entrées) ↓
+                </button>
+              )}
+            </div>
+          </>
+        )}
 
         <button className="btn btn-ghost" onClick={async () => { await logout(); navigate('/login'); }} style={{ marginBottom: 16 }}>
           Se déconnecter

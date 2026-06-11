@@ -13,7 +13,7 @@ const DEFAULT_FOODS = {
     { name: 'Skyr', unit: 'g', gramsPerUnit: 1, protPer100g: 11, visual: '1 pot (150g) = 17g prot', emoji: '🥛' },
     { name: 'Fromage blanc 0%', unit: 'g', gramsPerUnit: 1, protPer100g: 8, visual: '200g = 16g prot', emoji: '🥛' },
     { name: 'Thon en boîte', unit: 'g', gramsPerUnit: 1, protPer100g: 25, visual: '1 boîte (140g égoutté)', emoji: '🐟' },
-    { name: 'Œufs', unit: 'unité', gramsPerUnit: 60, protPer100g: 13, visual: '1 œuf = 8g prot', emoji: '🥚' },
+    { name: 'Œufs', unit: 'unité', gramsPerUnit: 60, protPer100g: 10, visual: '1 œuf = 6g prot · 70 kcal', emoji: '🥚' },
     { name: 'Saumon', unit: 'g', gramsPerUnit: 1, protPer100g: 25, visual: '1 beau filet ≈ 150g', emoji: '🐟' },
     { name: 'Jambon blanc', unit: 'tranche', gramsPerUnit: 45, protPer100g: 21, visual: '3-4 tranches', emoji: '🥩' },
     { name: 'Steak haché 5%', unit: 'g', gramsPerUnit: 1, protPer100g: 21, visual: '1 steak = 100g', emoji: '🥩' },
@@ -109,8 +109,9 @@ export default function MealPlan() {
   const meals = Object.entries(split).filter(([k, v]) => v > 0 && (k !== 'snack' || profile.hasSnack));
 
   // Si pas de mealSplit défini, afficher morning/lunch/dinner par défaut
+  const MEAL_ORDER = ['morning', 'lunch', 'dinner', 'snack'];
   const activeMeals = mealSplit
-    ? Object.entries(split).filter(([, v]) => v > 0)
+    ? MEAL_ORDER.map(k => [k, split[k]]).filter(([, v]) => v > 0)
     : [['morning', 25], ['lunch', 35], ['dinner', 30]];
 
   function getMealMacros(mealKey, pct) {

@@ -6,9 +6,9 @@ export default function TabBar() {
   const { pathname } = useLocation();
   const tabs = [
     { to: '/dashboard', icon: '🏠', label: 'Accueil' },
+    { to: '/mealplan', icon: '🍽️', label: 'Repas' },
     { to: '/checkin/daily', icon: '📋', label: 'Suivi' },
     { to: '/checkin/weekly', icon: '📅', label: 'Bilan' },
-    { to: '/mealplan', icon: '🍽️', label: 'Repas' },
     { to: '/progress', icon: '📈', label: 'Progrès' },
     { to: '/profile', icon: '👤', label: 'Profil' },
   ];

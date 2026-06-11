@@ -19,6 +19,7 @@ export default function ClientDashboard() {
   const [recentEntries, setRecentEntries] = useState([]);
   const [weeklyToday, setWeeklyToday] = useState(false);
   const [weekBalance, setWeekBalance] = useState(null);
+  const [lastWeeklyEntry, setLastWeeklyEntry] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -64,6 +65,12 @@ export default function ClientDashboard() {
       }
     }
     setWeekBalance(Math.round(totalDiff + resetOffset));
+
+    // Dernier bilan hebdo pour les progrès
+    const { collection: col2, query: q2, orderBy: ob2, limit: lim2, getDocs: gd2 } = await import('firebase/firestore');
+    const weeklyQ = q2(col2(db, 'clients', currentUser.uid, 'weeklyEntries'), ob2('weekStart', 'desc'), lim2(1));
+    const weeklySnap = await gd2(weeklyQ);
+    if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
 
     setLoading(false);
   }
@@ -192,7 +199,63 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        {/* Weight chart — same as coach view */}
+        {/* Bloc Mes progrès */}
+        {(profile.startWeight || profile.startMeasurements) && (
+          <>
+            <h2 className="section-title">Mes progrès</h2>
+            <div className="card" style={{ marginBottom: 20 }}>
+              {/* Poids */}
+              {profile.startWeight && (() => {
+                const currentW = todayWeight || lastWeeklyEntry?.avgWeight || null;
+                const deltaW = currentW ? +(currentW - profile.startWeight).toFixed(1) : null;
+                return (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border-light)' }}>
+                    <div>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>⚖️ Poids</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {profile.startWeight} kg</span>
+                    </div>
+                    {deltaW !== null ? (
+                      <span style={{ fontWeight: 800, fontSize: 16, color: deltaW < 0 ? 'var(--success)' : deltaW > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                        {deltaW > 0 ? '+' : ''}{deltaW} kg
+                      </span>
+                    ) : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>—</span>}
+                  </div>
+                );
+              })()}
+              {/* Mensurations */}
+              {profile.startMeasurements && lastWeeklyEntry?.measurements && [
+                { key: 'waist', label: 'Taille', emoji: '👗' },
+                { key: 'hips', label: 'Hanches', emoji: '🔵' },
+                { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+                { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+                { key: 'arms', label: 'Bras', emoji: '💪' },
+              ].map((m, i, arr) => {
+                const startVal = profile.startMeasurements[m.key];
+                const currentVal = lastWeeklyEntry.measurements[m.key];
+                if (!startVal || !currentVal) return null;
+                const delta = +(currentVal - startVal).toFixed(1);
+                return (
+                  <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                    <div>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{m.emoji} {m.label}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {startVal} cm</span>
+                    </div>
+                    <span style={{ fontWeight: 800, fontSize: 16, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                      {delta > 0 ? '+' : ''}{delta} cm
+                    </span>
+                  </div>
+                );
+              })}
+              {(!lastWeeklyEntry?.measurements || !profile.startMeasurements) && (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
+                  Remplis ton premier bilan hebdo pour voir tes progrès 📊
+                </p>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Weight chart */}
         {recentEntries.filter(e => e.weight).length > 1 && (
           <>
             <h2 className="section-title">Évolution du poids</h2>

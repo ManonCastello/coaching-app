@@ -5,6 +5,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { calculateBMR, calculateTDEE, calculateBMI, getBMICategory, calculateAgeFromDOB, WEEK_DAYS } from '../utils/calculations';
+
+const CLOUDINARY_CLOUD = 'dduaqnygn';
+const CLOUDINARY_PRESET = 'fitlog_photos';
+const MEASURE_FIELDS = [
+  { key: 'waist', label: 'Taille', emoji: '👗' },
+  { key: 'hips', label: 'Hanches', emoji: '🔵' },
+  { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+  { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+  { key: 'arms', label: 'Bras', emoji: '💪' },
+];
+const PHOTO_SLOTS = [
+  { key: 'face', label: 'Face' },
+  { key: 'profile', label: 'Profil' },
+  { key: 'back', label: 'Dos' },
+];
 import TabBar from '../components/TabBar';
 import CoachToggle from '../components/CoachToggle';
 
@@ -15,10 +30,15 @@ export default function ClientProfile() {
   const [loading, setLoading] = useState(true);
   const [editReminder, setEditReminder] = useState(false);
   const [editBilanDay, setEditBilanDay] = useState(false);
+  const [editStartData, setEditStartData] = useState(false);
   const [reminderHour, setReminderHour] = useState('20');
   const [reminderMin, setReminderMin] = useState('00');
   const [bilanDay, setBilanDay] = useState(1);
   const [saved, setSaved] = useState(false);
+  const [startForm, setStartForm] = useState({ weight: '', waist: '', hips: '', glutes: '', thighs: '', arms: '' });
+  const [startPhotos, setStartPhotos] = useState({ face: null, profile: null, back: null });
+  const [uploadingSlot, setUploadingSlot] = useState(null);
+  const fileRefs = { face: React.useRef(), profile: React.useRef(), back: React.useRef() };
 
   useEffect(() => {
     async function load() {
@@ -29,6 +49,15 @@ export default function ClientProfile() {
         const [h, m] = (data.reminderTime || '20:00').split(':');
         setReminderHour(h); setReminderMin(m);
         setBilanDay(data.weeklyBilanDay ?? 1);
+        setStartForm({
+          weight: data.startWeight || data.weight || '',
+          waist: data.startMeasurements?.waist || '',
+          hips: data.startMeasurements?.hips || '',
+          glutes: data.startMeasurements?.glutes || '',
+          thighs: data.startMeasurements?.thighs || '',
+          arms: data.startMeasurements?.arms || '',
+        });
+        setStartPhotos(data.startPhotos || { face: null, profile: null, back: null });
       }
       setLoading(false);
     }
@@ -45,6 +74,50 @@ export default function ClientProfile() {
     await updateDoc(doc(db, 'clients', currentUser.uid), { weeklyBilanDay: +bilanDay });
     setProfile(p => ({ ...p, weeklyBilanDay: +bilanDay }));
     setEditBilanDay(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function uploadStartPhoto(file, slot) {
+    const ln = (profile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
+    const fn = (profile?.firstName || '').toLowerCase().replace(/\s/g, '_');
+    const publicId = `fitlog/start/${fn}_${ln}_start_${slot}`;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+    formData.append('public_id', publicId);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.secure_url) return data.secure_url;
+    throw new Error('Upload failed');
+  }
+
+  async function handleStartPhotoSelect(slot, file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => setStartPhotos(p => ({ ...p, [slot]: e.target.result }));
+    reader.readAsDataURL(file);
+    setUploadingSlot(slot);
+    try {
+      const url = await uploadStartPhoto(file, slot);
+      setStartPhotos(p => ({ ...p, [slot]: url }));
+    } catch (e) { console.error(e); }
+    setUploadingSlot(null);
+  }
+
+  async function saveStartData() {
+    const startMeasurements = {
+      waist: startForm.waist ? +startForm.waist : null,
+      hips: startForm.hips ? +startForm.hips : null,
+      glutes: startForm.glutes ? +startForm.glutes : null,
+      thighs: startForm.thighs ? +startForm.thighs : null,
+      arms: startForm.arms ? +startForm.arms : null,
+    };
+    await updateDoc(doc(db, 'clients', currentUser.uid), {
+      startWeight: startForm.weight ? +startForm.weight : (profile.startWeight || profile.weight),
+      startMeasurements,
+      startPhotos,
+    });
+    setProfile(p => ({ ...p, startWeight: +startForm.weight, startMeasurements, startPhotos }));
+    setEditStartData(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
   function handleToggle() { switchMode(); navigate('/coach'); }
@@ -163,6 +236,96 @@ export default function ClientProfile() {
             </div>
           )}
         </div>
+        {/* Mesures de départ */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editStartData ? 16 : 0 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>📐 Mesures de départ</div>
+              {!editStartData && (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {profile.startWeight ? `⚖️ ${profile.startWeight} kg` : '⚖️ —'}
+                  {profile.startMeasurements?.waist ? ` · Taille ${profile.startMeasurements.waist} cm` : ''}
+                </p>
+              )}
+            </div>
+            <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditStartData(!editStartData)}>
+              {editStartData ? 'Annuler' : profile.startMeasurements ? 'Modifier' : '+ Ajouter'}
+            </button>
+          </div>
+
+          {!editStartData && profile.startMeasurements && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                {MEASURE_FIELDS.map(m => (
+                  <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.emoji} {m.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{profile.startMeasurements[m.key] ? `${profile.startMeasurements[m.key]} cm` : '—'}</span>
+                  </div>
+                ))}
+              </div>
+              {profile.startPhotos && (profile.startPhotos.face || profile.startPhotos.profile || profile.startPhotos.back) && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  {PHOTO_SLOTS.map(slot => profile.startPhotos[slot.key] && (
+                    <div key={slot.key}>
+                      <img src={profile.startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8 }} />
+                      <p style={{ fontSize: 11, textAlign: 'center', color: 'var(--text-muted)', marginTop: 4 }}>{slot.label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {editStartData && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="input-group">
+                <label className="input-label">⚖️ Poids de départ (kg)</label>
+                <input className="input" type="number" value={startForm.weight} onChange={e => setStartForm(p => ({ ...p, weight: e.target.value }))} step="0.1" placeholder="ex: 65" />
+              </div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-muted)' }}>📏 Mensurations de départ (cm)</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {MEASURE_FIELDS.map(m => (
+                  <div key={m.key} className="input-group">
+                    <label className="input-label">{m.emoji} {m.label}</label>
+                    <input className="input" type="number" value={startForm[m.key]} onChange={e => setStartForm(p => ({ ...p, [m.key]: e.target.value }))} placeholder="cm" step="0.5" />
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-muted)' }}>📸 Photos de départ</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                {PHOTO_SLOTS.map(slot => (
+                  <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()} style={{
+                      width: '100%', aspectRatio: '3/4', borderRadius: 'var(--radius-sm)',
+                      border: `2px dashed ${startPhotos[slot.key] ? 'var(--primary)' : 'var(--border)'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', overflow: 'hidden', background: 'var(--bg)',
+                    }}>
+                      {uploadingSlot === slot.key ? (
+                        <div className="spinner" style={{ width: 24, height: 24 }} />
+                      ) : startPhotos[slot.key] ? (
+                        <img src={startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: 24, color: 'var(--text-light)' }}>+</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</div>
+                        </div>
+                      )}
+                    </div>
+                    <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleStartPhotoSelect(slot.key, e.target.files[0])} />
+                    <span style={{ fontSize: 11, color: startPhotos[slot.key] ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      {startPhotos[slot.key] ? '✅ ' : ''}{slot.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button className="btn btn-primary" onClick={saveStartData} disabled={!!uploadingSlot}>
+                {uploadingSlot ? 'Upload en cours...' : 'Enregistrer'}
+              </button>
+            </div>
+          )}
+        </div>
+
       </div>
 
       <TabBar />

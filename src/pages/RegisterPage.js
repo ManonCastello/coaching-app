@@ -1,18 +1,38 @@
 // src/pages/RegisterPage.js
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { calculateBMR, calculateTDEE, calculateCalorieTarget, calculateMacros, calculateAgeFromDOB, ACTIVITY_LEVELS, GOALS, WEEK_DAYS } from '../utils/calculations';
 
-const STEPS = ['Compte', 'Identité', 'Mesures', 'Objectifs', 'Résumé'];
+const CLOUDINARY_CLOUD = 'dduaqnygn';
+const CLOUDINARY_PRESET = 'fitlog_photos';
+
+const STEPS = ['Compte', 'Identité', 'Mesures', 'Objectifs', 'Résumé', 'Départ'];
+
+const MEASURE_FIELDS = [
+  { key: 'waist', label: 'Taille', emoji: '👗' },
+  { key: 'hips', label: 'Hanches', emoji: '🔵' },
+  { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+  { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+  { key: 'arms', label: 'Bras', emoji: '💪' },
+];
+
+const PHOTO_SLOTS = [
+  { key: 'face', label: 'Face' },
+  { key: 'profile', label: 'Profil' },
+  { key: 'back', label: 'Dos' },
+];
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadingSlot, setUploadingSlot] = useState(null);
+  const [startPhotoURLs, setStartPhotoURLs] = useState({ face: null, profile: null, back: null });
+  const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
   const [form, setForm] = useState({
     email: '', password: '', confirmPassword: '',
@@ -24,6 +44,8 @@ export default function RegisterPage() {
     stepGoal: 10000, sleepGoal: 8, sessionsPerWeek: 3,
     reminderHour: '20', reminderMinute: '00',
     weeklyBilanDay: 1,
+    // Départ
+    startWaist: '', startHips: '', startGlutes: '', startThighs: '', startArms: '',
   });
 
   function set(key, value) { setForm(prev => ({ ...prev, [key]: value })); }
@@ -60,17 +82,57 @@ export default function RegisterPage() {
     return { bmr, tdee, calorieTarget, macros };
   }
 
+  async function uploadStartPhoto(file, slot, firstName, lastName) {
+    const ln = (lastName || 'client').toLowerCase().replace(/\s/g, '_');
+    const fn = (firstName || '').toLowerCase().replace(/\s/g, '_');
+    const publicId = `fitlog/start/${fn}_${ln}_start_${slot}`;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+    formData.append('public_id', publicId);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.secure_url) return data.secure_url;
+    throw new Error('Upload failed');
+  }
+
+  async function handlePhotoSelect(slot, file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => setStartPhotoURLs(p => ({ ...p, [slot]: e.target.result }));
+    reader.readAsDataURL(file);
+    setUploadingSlot(slot);
+    try {
+      const url = await uploadStartPhoto(file, slot, form.firstName, form.lastName);
+      setStartPhotoURLs(p => ({ ...p, [slot]: url }));
+    } catch (e) { console.error('Upload error', e); }
+    setUploadingSlot(null);
+  }
+
   async function handleSubmit() {
     setError(''); setLoading(true);
     try {
       const { bmr, tdee, calorieTarget, macros } = getCalcs();
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const uid = cred.user.uid;
+
+      const startMeasurements = {
+        waist: form.startWaist ? +form.startWaist : null,
+        hips: form.startHips ? +form.startHips : null,
+        glutes: form.startGlutes ? +form.startGlutes : null,
+        thighs: form.startThighs ? +form.startThighs : null,
+        arms: form.startArms ? +form.startArms : null,
+      };
+      const hasAnyMeasure = Object.values(startMeasurements).some(v => v !== null);
+
       await setDoc(doc(db, 'clients', uid), {
         uid, email: form.email,
         firstName: form.firstName, lastName: form.lastName,
         sex: form.sex, dob: form.dob, profession: form.profession,
         weight: +form.weight, height: +form.height,
+        startWeight: +form.weight,
+        startMeasurements: hasAnyMeasure ? startMeasurements : null,
+        startPhotos: (startPhotoURLs.face || startPhotoURLs.profile || startPhotoURLs.back) ? startPhotoURLs : null,
         activityLevel: form.activityLevel, goal: form.goal,
         bmr, tdee,
         targets: {
@@ -93,7 +155,13 @@ export default function RegisterPage() {
     setLoading(false);
   }
 
+  async function handleSkipAndSubmit() {
+    await handleSubmit();
+  }
+
   const calcs = step === 4 ? getCalcs() : null;
+  const isLastRealStep = step === 4;
+  const isStartStep = step === 5;
 
   return (
     <div className="app-shell" style={{ minHeight: '100vh', padding: '32px 24px' }}>
@@ -113,6 +181,7 @@ export default function RegisterPage() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
+      {/* ÉTAPE 0 — Compte */}
       {step === 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="input-group">
@@ -130,6 +199,7 @@ export default function RegisterPage() {
         </div>
       )}
 
+      {/* ÉTAPE 1 — Identité */}
       {step === 1 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -167,6 +237,7 @@ export default function RegisterPage() {
         </div>
       )}
 
+      {/* ÉTAPE 2 — Mesures */}
       {step === 2 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -199,6 +270,7 @@ export default function RegisterPage() {
         </div>
       )}
 
+      {/* ÉTAPE 3 — Objectifs */}
       {step === 3 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="input-group">
@@ -243,6 +315,7 @@ export default function RegisterPage() {
         </div>
       )}
 
+      {/* ÉTAPE 4 — Résumé */}
       {step === 4 && calcs && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="hero-banner">
@@ -275,13 +348,97 @@ export default function RegisterPage() {
         </div>
       )}
 
+      {/* ÉTAPE 5 — Mesures & photos de départ (optionnelle) */}
+      {step === 5 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="card" style={{ background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)', marginBottom: 4 }}>
+            <p style={{ fontSize: 13, color: 'var(--primary)', lineHeight: 1.6 }}>
+              📍 Cette étape est <strong>optionnelle</strong>. Tu peux la passer maintenant et remplir ces infos plus tard depuis ton profil. Mais plus tu remplis maintenant, plus on pourra mesurer ta progression dès le début.
+            </p>
+          </div>
+
+          {/* Poids de départ — pré-rempli */}
+          <div className="card">
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>⚖️ Poids de départ</div>
+            <div className="input-group">
+              <label className="input-label">Poids initial (kg)</label>
+              <input className="input" type="number" value={form.weight} onChange={e => set('weight', e.target.value)} step="0.1" />
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Pré-rempli depuis l'étape précédente. Tu peux ajuster si besoin.</p>
+          </div>
+
+          {/* Mensurations de départ */}
+          <div className="card">
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📏 Mensurations de départ (cm)</div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>À prendre le matin, à jeun, au même endroit.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {MEASURE_FIELDS.map(m => (
+                <div key={m.key} className="input-group">
+                  <label className="input-label">{m.emoji} {m.label}</label>
+                  <input className="input" type="number" value={form[`start${m.key.charAt(0).toUpperCase() + m.key.slice(1)}`]} onChange={e => set(`start${m.key.charAt(0).toUpperCase() + m.key.slice(1)}`, e.target.value)} placeholder="cm" step="0.5" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Photos de départ */}
+          <div className="card">
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📸 Photos de départ</div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Visibles uniquement par ta coach. Servent de référence de départ pour mesurer ta progression.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              {PHOTO_SLOTS.map(slot => (
+                <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <div
+                    onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()}
+                    style={{
+                      width: '100%', aspectRatio: '3/4', borderRadius: 'var(--radius-sm)',
+                      border: `2px dashed ${startPhotoURLs[slot.key] ? 'var(--primary)' : 'var(--border)'}`,
+                      background: startPhotoURLs[slot.key] ? 'transparent' : 'var(--bg)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: uploadingSlot ? 'wait' : 'pointer', overflow: 'hidden',
+                    }}>
+                    {uploadingSlot === slot.key ? (
+                      <div style={{ textAlign: 'center' }}>
+                        <div className="spinner" style={{ width: 24, height: 24, margin: '0 auto' }} />
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Upload...</div>
+                      </div>
+                    ) : startPhotoURLs[slot.key] ? (
+                      <img src={startPhotoURLs[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 28, color: 'var(--text-light)' }}>+</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</div>
+                      </div>
+                    )}
+                  </div>
+                  <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handlePhotoSelect(slot.key, e.target.files[0])} />
+                  <span style={{ fontSize: 11, color: startPhotoURLs[slot.key] ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                    {startPhotoURLs[slot.key] ? '✅ ' : ''}{slot.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Boutons */}
       <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {step < 4 ? (
+        {step < 4 && (
           <button className="btn btn-primary" type="button" onClick={handleNext}>Continuer →</button>
-        ) : (
-          <button className="btn btn-primary" type="button" onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Création du compte...' : '🚀 Commencer mon programme'}
-          </button>
+        )}
+        {step === 4 && (
+          <button className="btn btn-primary" type="button" onClick={nextStep}>Continuer → Mesures de départ</button>
+        )}
+        {step === 5 && (
+          <>
+            <button className="btn btn-primary" type="button" onClick={handleSubmit} disabled={loading || !!uploadingSlot}>
+              {loading ? 'Création du compte...' : uploadingSlot ? 'Upload en cours...' : '🚀 Commencer mon programme'}
+            </button>
+            <button className="btn btn-ghost" type="button" onClick={handleSkipAndSubmit} disabled={loading}>
+              Passer cette étape →
+            </button>
+          </>
         )}
         {step === 0 && (
           <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--text-muted)' }}>

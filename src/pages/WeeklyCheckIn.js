@@ -41,7 +41,9 @@ export default function WeeklyCheckIn({ coachMode }) {
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
   const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const prevWeekKey = format(startOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const weekLabel = format(new Date(), "'Semaine du' d MMMM yyyy", { locale: fr });
+  const [prevMeasurements, setPrevMeasurements] = useState(null);
 
   const [form, setForm] = useState({
     waist: '', hips: '', glutes: '', thighs: '', arms: '',
@@ -57,6 +59,9 @@ export default function WeeklyCheckIn({ coachMode }) {
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
       if (profileDoc.exists()) setProfile(profileDoc.data());
       const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey));
+      // Charger semaine précédente pour les deltas
+      const prevWeekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', prevWeekKey));
+      if (prevWeekDoc.exists()) setPrevMeasurements(prevWeekDoc.data().measurements || null);
       if (weekDoc.exists()) {
         const d = weekDoc.data();
         setForm({
@@ -207,12 +212,33 @@ export default function WeeklyCheckIn({ coachMode }) {
               { key: 'glutes', label: 'Fesses', emoji: '🍑' },
               { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
               { key: 'arms', label: 'Bras', emoji: '💪' },
-            ].map(m => (
-              <div key={m.key} className="input-group">
-                <label className="input-label">{m.emoji} {m.label}</label>
-                <input className="input" type="number" value={form[m.key]} onChange={e => set(m.key, e.target.value)} placeholder="cm" step="0.5" />
-              </div>
-            ))}
+            ].map(m => {
+              const current = form[m.key] ? +form[m.key] : null;
+              const prev = prevMeasurements?.[m.key] ?? null;
+              const start = profile?.startMeasurements?.[m.key] ?? null;
+              const deltaWeek = current !== null && prev !== null ? +(current - prev).toFixed(1) : null;
+              const deltaStart = current !== null && start !== null ? +(current - start).toFixed(1) : null;
+              return (
+                <div key={m.key} className="input-group">
+                  <label className="input-label">{m.emoji} {m.label}</label>
+                  <input className="input" type="number" value={form[m.key]} onChange={e => set(m.key, e.target.value)} placeholder="cm" step="0.5" />
+                  {(deltaWeek !== null || deltaStart !== null) && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                      {deltaWeek !== null && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: deltaWeek < 0 ? 'var(--success)' : deltaWeek > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          {deltaWeek > 0 ? '+' : ''}{deltaWeek} vs S-1
+                        </span>
+                      )}
+                      {deltaStart !== null && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: deltaStart < 0 ? 'var(--success)' : deltaStart > 0 ? 'var(--danger)' : 'var(--text-muted)', opacity: 0.75 }}>
+                          {deltaStart > 0 ? '+' : ''}{deltaStart} vs départ
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

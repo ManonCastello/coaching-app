@@ -130,13 +130,15 @@ export default function CoachDashboard() {
                   {client.checkedInToday ? '✅' : '⏳'}
                 </span>
               </Link>
-              {/* Archive button */}
-              <button
-                onClick={() => toggleArchive(client.id, client.archived)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: '4px', color: 'var(--text-light)' }}
-                title={client.archived ? 'Désarchiver' : 'Archiver'}>
-                {client.archived ? '♻️' : '📦'}
-              </button>
+              {/* Désarchiver uniquement dans la vue archivés */}
+              {client.archived && (
+                <button
+                  onClick={() => toggleArchive(client.id, client.archived)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: '4px', color: 'var(--text-light)' }}
+                  title="Désarchiver">
+                  ♻️
+                </button>
+              )}
             </div>
           ))}
         </div>

@@ -6,37 +6,215 @@ import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import TabBar from '../components/TabBar';
 
-// Base de données d'aliments de référence
-const DEFAULT_FOODS = {
+// ─── BASE DE DONNÉES NUTRITIONNELLES RÉELLES ───────────────────────────────
+// Toutes les valeurs sont pour 100g (sauf indication), mesurées depuis MFP
+const FOODS = {
   protein: [
-    { name: 'Poulet / dinde', unit: 'g', gramsPerUnit: 1, protPer100g: 31, visual: '1 paume épaisse ≈ 120g', emoji: '🍗' },
-    { name: 'Skyr', unit: 'g', gramsPerUnit: 1, protPer100g: 11, visual: '1 pot (150g) = 17g prot', emoji: '🥛' },
-    { name: 'Fromage blanc 0%', unit: 'g', gramsPerUnit: 1, protPer100g: 8, visual: '200g = 16g prot', emoji: '🥛' },
-    { name: 'Thon en boîte', unit: 'g', gramsPerUnit: 1, protPer100g: 25, visual: '1 boîte (140g égoutté)', emoji: '🐟' },
-    { name: 'Œufs', unit: 'unité', gramsPerUnit: 60, protPer100g: 10, visual: '1 œuf = 6g prot · 70 kcal', emoji: '🥚' },
-    { name: 'Saumon', unit: 'g', gramsPerUnit: 1, protPer100g: 25, visual: '1 beau filet ≈ 150g', emoji: '🐟' },
-    { name: 'Jambon blanc', unit: 'tranche', gramsPerUnit: 45, protPer100g: 21, visual: '3-4 tranches', emoji: '🥩' },
-    { name: 'Steak haché 5%', unit: 'g', gramsPerUnit: 1, protPer100g: 21, visual: '1 steak = 100g', emoji: '🥩' },
-    { name: 'Tofu', unit: 'g', gramsPerUnit: 1, protPer100g: 17, visual: '½ bloc ≈ 150g', emoji: '🫘' },
-    { name: 'Protéines végétales', unit: 'g', gramsPerUnit: 1, protPer100g: 70, visual: '1 dose (30g)', emoji: '💪' },
+    {
+      name: 'Poulet / dinde', emoji: '🍗',
+      kcalPer100g: 106, protPer100g: 23, lipPer100g: 1.5, glucPer100g: 0,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 paume épaisse ≈ 120g',
+      portionHint: (g) => `${Math.round(g)}g — environ ${Math.round(g/120*10)/10} paume(s)`,
+    },
+    {
+      name: 'Skyr', emoji: '🥛',
+      kcalPer100g: 53, protPer100g: 8.7, lipPer100g: 0.5, glucPer100g: 4.9,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 pot = 150g · 1 c.s. ≈ 50g',
+      portionHint: (g) => `${Math.round(g)}g — environ ${Math.round(g/50)} c.s.`,
+    },
+    {
+      name: 'Fromage blanc 0%', emoji: '🥛',
+      kcalPer100g: 79, protPer100g: 8.4, lipPer100g: 3.2, glucPer100g: 4,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 c.s. ≈ 50g · 1 pot = 100-150g',
+      portionHint: (g) => `${Math.round(g)}g — environ ${Math.round(g/50)} c.s.`,
+    },
+    {
+      name: 'Thon naturel', emoji: '🐟',
+      kcalPer100g: 109, protPer100g: 25, lipPer100g: 1, glucPer100g: 0,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 boîte égoutée ≈ 140g',
+      portionHint: (g) => `${Math.round(g)}g — environ ${Math.round(g/140*10)/10} boîte(s)`,
+    },
+    {
+      name: 'Œuf entier', emoji: '🥚',
+      kcalPer100g: 132, protPer100g: 11.3, lipPer100g: 9.4, glucPer100g: 0,
+      // 1 œuf = 53g → 70 kcal, 6g prot, 5g lip
+      unit: 'unité', gramsPerUnit: 53,
+      visual: '1 œuf (53g) = 6g prot · 70 kcal',
+      portionHint: (g) => {
+        const units = Math.round(g / 53 * 2) / 2;
+        return `${units} œuf(s) (${Math.round(units * 53)}g)`;
+      },
+    },
+    {
+      name: 'Saumon', emoji: '🐟',
+      kcalPer100g: 136, protPer100g: 24, lipPer100g: 4.4, glucPer100g: 0,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 beau filet ≈ 150g',
+      portionHint: (g) => `${Math.round(g)}g — environ ${Math.round(g/150*10)/10} filet(s)`,
+    },
+    {
+      name: 'Jambon blanc', emoji: '🥩',
+      kcalPer100g: 109, protPer100g: 21.8, lipPer100g: 1.8, glucPer100g: 1.8,
+      unit: 'tranche', gramsPerUnit: 45,
+      visual: '1 tranche ≈ 45g',
+      portionHint: (g) => {
+        const tr = Math.round(g / 45 * 2) / 2;
+        return `${tr} tranche(s) (${Math.round(tr * 45)}g)`;
+      },
+    },
+    {
+      name: 'Steak haché 5%', emoji: '🥩',
+      kcalPer100g: 193, protPer100g: 29.2, lipPer100g: 7.6, glucPer100g: 0,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 steak ≈ 100g',
+      portionHint: (g) => `${Math.round(g)}g — ${Math.round(g/100*10)/10} steak(s)`,
+    },
+    {
+      name: 'Tofu nature', emoji: '🫘',
+      kcalPer100g: 169, protPer100g: 15, lipPer100g: 8, glucPer100g: 5.5,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '½ bloc ≈ 150g · 1 c.s. ≈ 30g',
+      portionHint: (g) => `${Math.round(g)}g — environ ${Math.round(g/30)} c.s.`,
+    },
+    {
+      name: 'Protéine végétale texturée', emoji: '🌱',
+      kcalPer100g: 327, protPer100g: 51.5, lipPer100g: 1.2, glucPer100g: 51.4,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 dose = 30g (sèche)',
+      portionHint: (g) => `${Math.round(g)}g sec — environ ${Math.round(g/30)} dose(s)`,
+    },
+    {
+      name: 'Whey (Impact MyProtein)', emoji: '💪',
+      kcalPer100g: 381, protPer100g: 75, lipPer100g: 6.3, glucPer100g: 5.9,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 dose ≈ 25g',
+      portionHint: (g) => `${Math.round(g)}g — environ ${Math.round(g/25*10)/10} dose(s)`,
+    },
   ],
   carbs: [
-    { name: 'Riz cuit', unit: 'c.s.', gramsPerUnit: 25, carbsPer100g: 28, visual: '6-8 c.s. = ¼ assiette', emoji: '🍚' },
-    { name: 'Pâtes cuites', unit: 'c.s.', gramsPerUnit: 25, carbsPer100g: 25, visual: '6-8 c.s. = ¼ assiette', emoji: '🍝' },
-    { name: 'Quinoa cuit', unit: 'c.s.', gramsPerUnit: 25, carbsPer100g: 22, visual: '6-8 c.s. = ¼ assiette', emoji: '🌾' },
-    { name: 'Patate douce', unit: 'c.s.', gramsPerUnit: 30, carbsPer100g: 20, visual: '½ patate moyenne', emoji: '🍠' },
-    { name: 'Pain complet', unit: 'tranche', gramsPerUnit: 35, carbsPer100g: 44, visual: '1 tranche ≈ 2,5 c.s.', emoji: '🍞' },
-    { name: 'Flocons d\'avoine', unit: 'c.s.', gramsPerUnit: 15, carbsPer100g: 60, visual: '4-5 c.s. = 60g', emoji: '🥣' },
-    { name: 'Lentilles cuites', unit: 'c.s.', gramsPerUnit: 30, carbsPer100g: 17, visual: '6-8 c.s. = ¼ assiette', emoji: '🫘' },
+    {
+      name: 'Riz basmati', emoji: '🍚',
+      kcalPer100g: 350, protPer100g: 7.4, lipPer100g: 0.6, glucPer100g: 78,
+      unit: 'g_cru', gramsPerUnit: 1,
+      visual: 'Peser CRU · 100g cru = 200g cuit ≈ 8 c.s.',
+      portionHint: (g) => {
+        const cuit = Math.round(g * 2);
+        const cs = Math.round(cuit / 25);
+        return `${Math.round(g)}g cru → ${cuit}g cuit ≈ ${cs} c.s.`;
+      },
+    },
+    {
+      name: 'Pâtes (penne/rigate)', emoji: '🍝',
+      kcalPer100g: 356, protPer100g: 12, lipPer100g: 1.5, glucPer100g: 72.2,
+      unit: 'g_cru', gramsPerUnit: 1,
+      visual: 'Peser CRU · 100g cru = 200g cuit ≈ 8 c.s.',
+      portionHint: (g) => {
+        const cuit = Math.round(g * 2);
+        const cs = Math.round(cuit / 25);
+        return `${Math.round(g)}g cru → ${cuit}g cuit ≈ ${cs} c.s.`;
+      },
+    },
+    {
+      name: 'Quinoa cuit', emoji: '🌾',
+      kcalPer100g: 151, protPer100g: 7.8, lipPer100g: 3.4, glucPer100g: 26.3,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 c.s. ≈ 25g cuit',
+      portionHint: (g) => `${Math.round(g)}g cuit ≈ ${Math.round(g/25)} c.s.`,
+    },
+    {
+      name: 'Patate douce', emoji: '🍠',
+      kcalPer100g: 100, protPer100g: 1.2, lipPer100g: 0.3, glucPer100g: 23,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 petite patate ≈ 150g · 1 c.s. ≈ 30g',
+      portionHint: (g) => `${Math.round(g)}g ≈ ${Math.round(g/30)} c.s.`,
+    },
+    {
+      name: 'Pomme de terre', emoji: '🥔',
+      kcalPer100g: 80, protPer100g: 2, lipPer100g: 0.1, glucPer100g: 19,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 moyenne ≈ 150g · 1 c.s. ≈ 30g',
+      portionHint: (g) => `${Math.round(g)}g ≈ ${Math.round(g/150*10)/10} pomme(s) de terre`,
+    },
+    {
+      name: 'Pain complet', emoji: '🍞',
+      kcalPer100g: 250, protPer100g: 9, lipPer100g: 1.8, glucPer100g: 50.6,
+      unit: 'tranche', gramsPerUnit: 35,
+      visual: '1 tranche ≈ 35g',
+      portionHint: (g) => {
+        const tr = Math.round(g / 35 * 2) / 2;
+        return `${tr} tranche(s) (${Math.round(tr * 35)}g)`;
+      },
+    },
+    {
+      name: 'Pain blanc', emoji: '🍞',
+      kcalPer100g: 259, protPer100g: 9.3, lipPer100g: 2.8, glucPer100g: 50,
+      unit: 'tranche', gramsPerUnit: 35,
+      visual: '1 tranche ≈ 35g',
+      portionHint: (g) => {
+        const tr = Math.round(g / 35 * 2) / 2;
+        return `${tr} tranche(s) (${Math.round(tr * 35)}g)`;
+      },
+    },
+    {
+      name: 'Flocons d\'avoine', emoji: '🥣',
+      kcalPer100g: 364, protPer100g: 11, lipPer100g: 7, glucPer100g: 68.9,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 c.s. ≈ 15g · 1 bol = 60g',
+      portionHint: (g) => `${Math.round(g)}g ≈ ${Math.round(g/15)} c.s.`,
+    },
+    {
+      name: 'Lentilles cuites', emoji: '🫘',
+      kcalPer100g: 94, protPer100g: 7.1, lipPer100g: 0.5, glucPer100g: 13,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 c.s. ≈ 30g cuit',
+      portionHint: (g) => `${Math.round(g)}g cuit ≈ ${Math.round(g/30)} c.s.`,
+    },
   ],
   fat: [
-    { name: 'Huile d\'olive', unit: 'c.à.c', gramsPerUnit: 5, fatPer100g: 100, visual: '1 c.à.c = 5g lipides', emoji: '🫒' },
-    { name: 'Avocat', unit: 'c.s.', gramsPerUnit: 25, fatPer100g: 15, visual: '¼ avocat = 4g lipides', emoji: '🥑' },
-    { name: 'Amandes / noix', unit: 'unité', gramsPerUnit: 5, fatPer100g: 55, visual: '10-15 amandes ≈ 15g', emoji: '🥜' },
-    { name: 'Beurre de cacahuète', unit: 'c.à.c', gramsPerUnit: 10, fatPer100g: 50, visual: '1 c.à.c = 5g lipides', emoji: '🥜' },
+    {
+      name: 'Huile d\'olive', emoji: '🫒',
+      kcalPer100g: 900, protPer100g: 0, lipPer100g: 100, glucPer100g: 0,
+      unit: 'ml', gramsPerUnit: 10, // 1 c.à.c = ~5ml, 1 c.s. = ~10ml
+      visual: '1 c.à.c = 5ml = 45 kcal · 1 c.s. = 10ml = 90 kcal',
+      portionHint: (g) => {
+        const ml = Math.round(g / 1.0); // huile : 1ml ≈ 0.9g lipides → on simplifie
+        const cs = Math.round(ml / 10 * 2) / 2;
+        const cac = Math.round(ml / 5 * 2) / 2;
+        return `${ml}ml ≈ ${cs} c.s. ou ${cac} c.à.c`;
+      },
+    },
+    {
+      name: 'Avocat', emoji: '🥑',
+      kcalPer100g: 220, protPer100g: 2, lipPer100g: 22, glucPer100g: 3.5,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '½ avocat ≈ 80g · ¼ avocat ≈ 40g',
+      portionHint: (g) => `${Math.round(g)}g ≈ ${Math.round(g/80*10)/10} demi-avocat(s)`,
+    },
+    {
+      name: 'Amandes', emoji: '🥜',
+      kcalPer100g: 600, protPer100g: 21, lipPer100g: 53, glucPer100g: 21,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '10g = 60 kcal ≈ 7-8 amandes',
+      portionHint: (g) => `${Math.round(g)}g ≈ ${Math.round(g / 10 * 7)}-${Math.round(g / 10 * 8)} amandes`,
+    },
+    {
+      name: 'Beurre de cacahuète', emoji: '🥜',
+      kcalPer100g: 620, protPer100g: 29, lipPer100g: 50, glucPer100g: 12,
+      unit: 'g', gramsPerUnit: 1,
+      visual: '1 c.à.c = 10g · 1 c.s. = 20g',
+      portionHint: (g) => {
+        const cac = Math.round(g / 10 * 2) / 2;
+        return `${Math.round(g)}g ≈ ${cac} c.à.c`;
+      },
+    },
   ],
 };
 
+const MEAL_ORDER = ['morning', 'lunch', 'dinner', 'snack'];
 const MEAL_LABELS = {
   morning: { label: 'Petit-déjeuner', emoji: '🌅' },
   lunch: { label: 'Déjeuner', emoji: '☀️' },
@@ -44,31 +222,18 @@ const MEAL_LABELS = {
   snack: { label: 'Collation', emoji: '🍱' },
 };
 
-function roundToHalf(n) { return Math.round(n * 2) / 2; }
+// Calculer les grammes nécessaires pour atteindre targetG d'un macro
+function gramsForMacro(food, macro, targetG) {
+  const per100 = macro === 'protein' ? food.protPer100g
+    : macro === 'carbs' ? food.glucPer100g
+    : food.lipPer100g;
+  if (!per100 || per100 === 0) return null;
+  return (targetG / per100) * 100;
+}
 
-function calcPortions(macro, amount, foods, macroKey) {
-  // Calcule les meilleures équivalences pour un objectif macro donné
-  return foods.map(food => {
-    let grams, portions, label;
-    if (macro === 'protein') {
-      grams = (amount / food.protPer100g) * 100;
-      if (food.unit === 'unité') { portions = roundToHalf(grams / food.gramsPerUnit); label = `${portions} ${portions <= 1 ? 'unité' : 'unités'}`; }
-      else if (food.unit === 'tranche') { portions = roundToHalf(grams / food.gramsPerUnit); label = `${portions} ${portions <= 1 ? 'tranche' : 'tranches'}`; }
-      else { label = `${Math.round(grams)} g`; }
-    } else if (macro === 'carbs') {
-      grams = (amount / food.carbsPer100g) * 100;
-      if (food.unit === 'c.s.') { portions = roundToHalf(grams / food.gramsPerUnit); label = `${portions} c.s.`; }
-      else if (food.unit === 'tranche') { portions = roundToHalf(grams / food.gramsPerUnit); label = `${portions} ${portions <= 1 ? 'tranche' : 'tranches'}`; }
-      else { label = `${Math.round(grams)} g`; }
-    } else if (macro === 'fat') {
-      grams = (amount / food.fatPer100g) * 100;
-      if (food.unit === 'c.à.c') { portions = roundToHalf(grams / food.gramsPerUnit); label = `${portions} c.à.c`; }
-      else if (food.unit === 'c.s.') { portions = roundToHalf(grams / food.gramsPerUnit); label = `${portions} c.s.`; }
-      else if (food.unit === 'unité') { portions = roundToHalf(grams / food.gramsPerUnit); label = `${portions} unités`; }
-      else { label = `${Math.round(grams)} g`; }
-    }
-    return { ...food, label };
-  });
+// Calories apportées par X grammes d'un aliment
+function kcalFor(food, grams) {
+  return Math.round((grams / 100) * food.kcalPer100g);
 }
 
 export default function MealPlan() {
@@ -88,6 +253,12 @@ export default function MealPlan() {
         setProfile(data);
         setMealSplit(data.mealSplit || null);
         setCustomFoods(data.customFoods || { protein: [], carbs: [], fat: [] });
+        // Définir le repas actif par défaut selon l'heure
+        const h = new Date().getHours();
+        if (h < 10) setActiveMeal('morning');
+        else if (h < 15) setActiveMeal('lunch');
+        else if (h < 20) setActiveMeal('dinner');
+        else setActiveMeal('dinner');
       }
       setLoading(false);
     }
@@ -103,16 +274,10 @@ export default function MealPlan() {
   const totalCarbs = targets.carbs || 150;
   const totalFat = targets.fat || 55;
 
-  // Repas actifs selon mealSplit
-  const defaultSplit = { morning: 25, lunch: 35, dinner: 30, snack: 10 };
+  const defaultSplit = { morning: 25, lunch: 35, dinner: 30, snack: 0 };
   const split = mealSplit || defaultSplit;
-  const meals = Object.entries(split).filter(([k, v]) => v > 0 && (k !== 'snack' || profile.hasSnack));
-
-  // Si pas de mealSplit défini, afficher morning/lunch/dinner par défaut
-  const MEAL_ORDER = ['morning', 'lunch', 'dinner', 'snack'];
-  const activeMeals = mealSplit
-    ? MEAL_ORDER.map(k => [k, split[k]]).filter(([, v]) => v > 0)
-    : [['morning', 25], ['lunch', 35], ['dinner', 30]];
+  const activeMeals = MEAL_ORDER.filter(k => split[k] > 0 && (k !== 'snack' || profile.hasSnack))
+    .map(k => [k, split[k]]);
 
   function getMealMacros(mealKey, pct) {
     return {
@@ -124,18 +289,18 @@ export default function MealPlan() {
   }
 
   const allFoods = {
-    protein: [...DEFAULT_FOODS.protein, ...(customFoods.protein || [])],
-    carbs: [...DEFAULT_FOODS.carbs, ...(customFoods.carbs || [])],
-    fat: [...DEFAULT_FOODS.fat, ...(customFoods.fat || [])],
+    protein: [...FOODS.protein, ...(customFoods.protein || [])],
+    carbs: [...FOODS.carbs, ...(customFoods.carbs || [])],
+    fat: [...FOODS.fat, ...(customFoods.fat || [])],
   };
 
   const currentMealPct = activeMeals.find(([k]) => k === activeMeal)?.[1] || 30;
   const mealMacros = getMealMacros(activeMeal, currentMealPct);
 
   const macroTabs = [
-    { key: 'protein', label: 'Protéines', emoji: '🥩', color: '#7C3AED', amount: mealMacros.protein, unit: 'g' },
-    { key: 'carbs', label: 'Glucides', emoji: '🍚', color: '#EC4899', amount: mealMacros.carbs, unit: 'g' },
-    { key: 'fat', label: 'Lipides', emoji: '🥑', color: '#F59E0B', amount: mealMacros.fat, unit: 'g' },
+    { key: 'protein', label: 'Protéines', emoji: '🥩', color: '#7C3AED', amount: mealMacros.protein },
+    { key: 'carbs', label: 'Glucides', emoji: '🍚', color: '#EC4899', amount: mealMacros.carbs },
+    { key: 'fat', label: 'Lipides', emoji: '🥑', color: '#F59E0B', amount: mealMacros.fat },
   ];
 
   return (
@@ -148,120 +313,163 @@ export default function MealPlan() {
 
       <div className="page">
 
+        {/* Info calories journalières */}
+        <div className="card" style={{ marginBottom: 20, background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--primary)' }}>Objectif journalier</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                Dont ~180 kcal pour 2-3 fruits · {totalCalories - 180} kcal pour les repas
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 800, fontSize: 22, color: 'var(--primary)' }}>{totalCalories}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>kcal / jour</div>
+            </div>
+          </div>
+        </div>
+
         {/* Assiette type */}
         <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>🍽️ L'assiette type</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
             {[
               { label: '½ assiette', sub: '🥦 Légumes', color: '#22C55E', bg: '#F0FDF4' },
               { label: '¼ assiette', sub: '🍗 Protéines', color: '#7C3AED', bg: '#F5F3FF' },
               { label: '¼ assiette', sub: '🍚 Glucides', color: '#EC4899', bg: '#FDF2F8' },
               { label: 'Petite portion', sub: '🥑 Lipides', color: '#F59E0B', bg: '#FFFBEB' },
             ].map(s => (
-              <div key={s.sub} style={{ padding: '12px', borderRadius: 10, background: s.bg, textAlign: 'center' }}>
-                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.sub.split(' ')[0]}</div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: s.color }}>{s.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.sub.split(' ').slice(1).join(' ')}</div>
+              <div key={s.sub} style={{ padding: '10px', borderRadius: 10, background: s.bg, textAlign: 'center' }}>
+                <div style={{ fontSize: 20, marginBottom: 2 }}>{s.sub.split(' ')[0]}</div>
+                <div style={{ fontWeight: 700, fontSize: 12, color: s.color }}>{s.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{s.sub.split(' ').slice(1).join(' ')}</div>
               </div>
             ))}
           </div>
           <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            Mange lentement et en pleine conscience · Si tu as très faim : augmente les légumes et les protéines
+            Mange lentement · Si encore faim : augmente les légumes et les protéines
           </p>
         </div>
 
-        {/* Récap calories par repas */}
-        <div style={{ marginBottom: 20 }}>
-          <h2 className="section-title">Mes repas</h2>
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-            {activeMeals.map(([key, pct]) => (
+        {/* Sélection du repas */}
+        <h2 className="section-title">Mes repas</h2>
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 16 }}>
+          {activeMeals.map(([key, pct]) => {
+            const mm = getMealMacros(key, pct);
+            return (
               <button key={key} onClick={() => setActiveMeal(key)} style={{
-                flexShrink: 0, padding: '10px 16px', borderRadius: 'var(--radius-sm)',
+                flexShrink: 0, padding: '10px 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
                 border: `2px solid ${activeMeal === key ? 'var(--primary)' : 'var(--border)'}`,
                 background: activeMeal === key ? 'var(--primary-bg)' : 'white',
-                cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'all 0.2s',
+                fontFamily: 'var(--font-body)', transition: 'all 0.2s', textAlign: 'center',
               }}>
-                <div style={{ fontSize: 18 }}>{MEAL_LABELS[key]?.emoji}</div>
+                <div style={{ fontSize: 20 }}>{MEAL_LABELS[key]?.emoji}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: activeMeal === key ? 'var(--primary)' : 'var(--text)', marginTop: 2 }}>
                   {MEAL_LABELS[key]?.label}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getMealMacros(key, pct).calories} kcal</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{mm.calories} kcal</div>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        {/* Macros du repas sélectionné */}
+        {/* Détail macros + équivalences */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>
             {MEAL_LABELS[activeMeal]?.emoji} {MEAL_LABELS[activeMeal]?.label} — {mealMacros.calories} kcal
           </div>
+
+          {/* Tabs macro */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             {macroTabs.map(m => (
               <button key={m.key} onClick={() => setActiveMacro(m.key)} style={{
-                flex: 1, padding: '8px 4px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                flex: 1, padding: '10px 4px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
                 border: `2px solid ${activeMacro === m.key ? m.color : 'var(--border)'}`,
-                background: activeMacro === m.key ? `${m.color}15` : 'white',
-                fontFamily: 'var(--font-body)', textAlign: 'center',
+                background: activeMacro === m.key ? `${m.color}18` : 'white',
+                fontFamily: 'var(--font-body)', textAlign: 'center', transition: 'all 0.2s',
               }}>
-                <div style={{ fontSize: 16 }}>{m.emoji}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: m.color }}>{m.amount}g</div>
+                <div style={{ fontSize: 18 }}>{m.emoji}</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: m.color, marginTop: 2 }}>{m.amount}g</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.label}</div>
               </button>
             ))}
           </div>
 
-          {/* Liste d'équivalences */}
+          {/* Liste équivalences */}
           {(() => {
             const macro = macroTabs.find(m => m.key === activeMacro);
-            const foods = calcPortions(activeMacro, macro.amount, allFoods[activeMacro]);
+            const foods = allFoods[activeMacro];
+
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                  Pour atteindre <strong style={{ color: macro.color }}>{macro.amount}g de {macro.label.toLowerCase()}</strong> :
+              <div>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  Pour <strong style={{ color: macro.color }}>{macro.amount}g de {macro.label.toLowerCase()}</strong>
+                  {' '}({mealMacros.calories} kcal au total pour ce repas) :
                 </p>
-                {foods.map((food, i) => (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '10px 12px', borderRadius: 10,
-                    background: 'var(--bg)', border: '1px solid var(--border-light)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 22 }}>{food.emoji}</span>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{food.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{food.visual}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {foods.map((food, i) => {
+                    const grams = gramsForMacro(food, activeMacro, macro.amount);
+                    if (!grams || grams <= 0 || grams > 1000) return null;
+                    const kcal = kcalFor(food, grams);
+                    const portionText = food.portionHint ? food.portionHint(grams) : `${Math.round(grams)}g`;
+                    // Indicateur : est-ce que cette source couvre bien le budget calorique ?
+                    const calPct = Math.round((kcal / mealMacros.calories) * 100);
+                    const calColor = calPct > 80 ? 'var(--danger)' : calPct > 50 ? 'var(--warning)' : 'var(--success)';
+
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '10px 12px', borderRadius: 10,
+                        background: 'var(--bg)', border: '1px solid var(--border-light)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <span style={{ fontSize: 24, flexShrink: 0 }}>{food.emoji}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>{food.name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{food.visual}</div>
+                            <div style={{ fontSize: 11, color: calColor, marginTop: 3, fontWeight: 600 }}>
+                              {kcal} kcal pour cette portion ({calPct}% du repas)
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
+                          <div style={{ fontWeight: 800, fontSize: 14, color: macro.color }}>{portionText}</div>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
-                      <div style={{ fontWeight: 800, fontSize: 15, color: macro.color }}>{food.label}</div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}
         </div>
 
-        {/* Légumes */}
+        {/* Fruits */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🥦 Légumes</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', background: '#F0FDF4', borderRadius: 10 }}>
-            <span style={{ fontSize: 28 }}>🥦</span>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🍎 Fruits — ~180 kcal/jour</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px', background: '#FFF7ED', borderRadius: 10 }}>
+            <span style={{ fontSize: 28 }}>🍎</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#22C55E' }}>½ assiette à chaque repas</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>8-10 grosses c.s. cuits · Si sensible au transit : préférer cuits</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#F97316' }}>2 à 3 fruits entiers par jour</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+                ≈ 180 kcal déjà inclus dans ton objectif · 1 fruit = 50-80 kcal<br/>
+                Idéalement : 1 au petit-déjeuner + 1 en collation ou dessert · Pas en jus
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Fruits */}
+        {/* Légumes */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🍎 Fruits</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', background: '#FFF7ED', borderRadius: 10 }}>
-            <span style={{ fontSize: 28 }}>🍎</span>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🥦 Légumes — à volonté</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px', background: '#F0FDF4', borderRadius: 10 }}>
+            <span style={{ fontSize: 28 }}>🥦</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#F97316' }}>2 à 3 fruits entiers par jour</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Pas en jus · 1 au petit-déjeuner · 1 en collation</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#22C55E' }}>½ assiette à chaque repas principal</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+                250-300g · 8-10 c.s. cuits · Crus ou cuits selon tolérance digestive<br/>
+                Légumes cuits si sensible au transit
+              </div>
             </div>
           </div>
         </div>
@@ -269,20 +477,23 @@ export default function MealPlan() {
         {/* Hydratation */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>💧 Hydratation</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', background: '#EFF6FF', borderRadius: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px', background: '#EFF6FF', borderRadius: 10 }}>
             <span style={{ fontSize: 28 }}>💧</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#3B82F6' }}>1,5 à 2L d'eau par jour</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Un peu plus les jours de sport · Commence chaque repas par un grand verre</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#3B82F6' }}>1,5 à 2L d'eau par jour minimum</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+                Plus les jours de sport · Commence chaque repas par un grand verre<br/>
+                Thé/café sans sucre comptent · Pas de boissons sucrées
+              </div>
             </div>
           </div>
         </div>
 
         {/* Plaisir */}
         <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🎉 Plaisir</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🎉 Repas plaisir</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            1 à 2 fois par semaine : une viennoiserie, un restau, une glace... Si restau, allège les glucides et lipides autour de ce repas. Si tu bouges plus, tu peux manger un peu plus.
+            1 à 2 fois par semaine : restau, viennoiserie, glace... Si restau → allège les glucides et lipides autour. Si tu bouges plus → tu peux manger un peu plus.
           </div>
         </div>
 

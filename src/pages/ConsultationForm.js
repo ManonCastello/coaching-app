@@ -491,7 +491,7 @@ export default function ConsultationForm() {
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>💬 Réponses aux objections</div>
               {[
                 { obj: '"C\'est un budget."', rep: '"Je comprends. Ce qui coûte cher aussi, c\'est de prendre un accompagnement trop léger, de ne pas s\'y tenir, puis de repartir de zéro dans deux mois."' },
-                { obj: '"Je peux essayer seul(e)."', rep: '"Bien sûr. Mais si tu viens me voir aujourd\'hui, c\'est probablement que seul(e), ce n'est pas si simple."' },
+                { obj: "Je peux essayer seul(e).", rep: "Bien sûr. Mais si tu viens me voir aujourd'hui, c'est probablement que seul(e), ce n'est pas si simple." },
                 { obj: '"J\'ai peur d\'être trop surveillée."', rep: '"Je ne suis pas là pour te fliquer. Je suis là pour t\'aider à rendre des comptes intelligemment."' },
               ].map((o, i) => (
                 <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: i < 2 ? '1px solid var(--border-light)' : 'none' }}>

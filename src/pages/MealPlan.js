@@ -208,7 +208,7 @@ export default function MealPlan() {
             return (
               <button key={key} onClick={() => { setActiveMeal(key); setPortions({}); }} style={{
                 flexShrink: 0, padding: '8px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                border: `2px solid ${activeMeal === key ? 'var(--primary)' : 'var(--border)'}`,
+                border: '2px solid ' + (activeMeal === key ? 'var(--primary)' : 'var(--border)'),
                 background: activeMeal === key ? 'var(--primary-bg)' : 'white',
                 fontFamily: 'var(--font-body)', transition: 'all 0.2s', textAlign: 'center',
               }}>
@@ -250,7 +250,7 @@ export default function MealPlan() {
                 </span>
               </div>
               <div style={{ height: 8, background: 'var(--border-light)', borderRadius: 4 }}>
-                <div style={{ height: '100%', borderRadius: 4, background: m.pct >= 100 ? '#22C55E' : m.color, width: `${m.pct}%`, transition: 'width 0.3s' }} />
+                <div style={{ height: '100%', borderRadius: 4, background: m.pct >= 100 ? '#22C55E' : m.color, width: m.pct + '%', transition: 'width 0.3s' }} />
               </div>
             </div>
           ))}
@@ -298,8 +298,8 @@ export default function MealPlan() {
             {CATS.map(cat => (
               <button key={cat.key} onClick={() => setActiveCategory(cat.key)} style={{
                 flex: 1, padding: '8px 4px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                border: `2px solid ${activeCategory === cat.key ? cat.color : 'var(--border)'}`,
-                background: activeCategory === cat.key ? `${cat.color}18` : 'white',
+                border: '2px solid ' + (activeCategory === cat.key ? cat.color : 'var(--border)'),
+                background: activeCategory === cat.key ? cat.color + '18' : 'white',
                 fontFamily: 'var(--font-body)', textAlign: 'center', transition: 'all 0.2s',
               }}>
                 <div style={{ fontSize: 16 }}>{cat.emoji}</div>
@@ -322,8 +322,8 @@ export default function MealPlan() {
 
               return (
                 <div key={food.id} style={{
-                  borderRadius: 10, border: `1.5px solid ${isSelected ? catColor : 'var(--border-light)'}`,
-                  background: isSelected ? `${catColor}08` : 'white', overflow: 'hidden',
+                  borderRadius: 10, border: '1.5px solid ' + (isSelected ? catColor : 'var(--border-light)'),
+                  background: isSelected ? catColor + '08' : 'white', overflow: 'hidden',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', gap: 10 }}>
                     <span style={{ fontSize: 22, flexShrink: 0 }}>{food.emoji}</span>
@@ -358,7 +358,7 @@ export default function MealPlan() {
                           style={{ width: 40, textAlign: 'center', fontSize: 13, fontWeight: 800, color: catColor, border: 'none', borderBottom: '1.5px solid ' + catColor, background: 'transparent', fontFamily: 'var(--font-body)', outline: 'none' }}
                         />
                       )}
-                      <button onClick={() => changeQty(food.id, 0.5)} style={{ width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${catColor}`, background: isSelected ? catColor : 'white', cursor: 'pointer', fontWeight: 700, fontSize: 16, color: isSelected ? 'white' : catColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)' }}>+</button>
+                      <button onClick={() => changeQty(food.id, 0.5)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid ' + catColor, background: isSelected ? catColor : 'white', cursor: 'pointer', fontWeight: 700, fontSize: 16, color: isSelected ? 'white' : catColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)' }}>+</button>
                     </div>
                   </div>
                   {isSelected && (

@@ -39,6 +39,7 @@ export default function CoachClientDetail() {
   const [reminderMin, setReminderMin] = useState('00');
   const [bilanDay, setBilanDay] = useState(1);
   const [weekGoals, setWeekGoals] = useState(null);
+  const [clientConsultation, setClientConsultation] = useState(null);
   const [savingGoals, setSavingGoals] = useState(false);
   const [mealSplit, setMealSplit] = useState({ morning: 25, lunch: 35, dinner: 30, snack: 0 });
   const [hasSnack, setHasSnack] = useState(false);
@@ -90,6 +91,12 @@ export default function CoachClientDetail() {
         (wgData.goals || []).forEach(g => { gf[g.key] = { ...g }; });
         if (Object.keys(gf).length) setGoalsForm(prev => ({ ...prev, ...gf }));
       }
+      // Charger la consultation attachée à ce client
+      const { collection: colC, query: qC, where: whereC, getDocs: gdC, limit: limC } = await import('firebase/firestore');
+      const consultQ = qC(colC(db, 'consultations'), whereC('attachedClientId', '==', clientId), limC(1));
+      const consultSnap = await gdC(consultQ);
+      if (!consultSnap.empty) setClientConsultation(consultSnap.docs[0].data());
+
       setLoading(false);
     }
     load();
@@ -313,6 +320,7 @@ export default function CoachClientDetail() {
     { key: 'journal', label: '📋 Journal' },
     { key: 'bilans', label: '📅 Bilans' },
     { key: 'targets', label: '🎯 Objectifs' },
+    { key: 'consultation', label: '📋 Consulte' },
   ];
 
   return (
@@ -1066,6 +1074,82 @@ export default function CoachClientDetail() {
 
           </div>
         )}
+      {/* CONSULTATION */}
+        {activeTab === 'consultation' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {clientConsultation ? (
+              <>
+                <div className="card" style={{ background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>📋 Consultation du {clientConsultation.date}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                        {clientConsultation.finalized ? '✅ Finalisée' : '⏳ En cours'}
+                        {clientConsultation.offerChosen && ` · ${clientConsultation.offerChosen === 'platinum' ? '💎 Platinum' : clientConsultation.offerChosen === 'gold' ? '🥇 Gold' : clientConsultation.offerChosen === 'thinking' ? '🤔 Réflexion' : '❌ Non'}`}
+                      </div>
+                    </div>
+                    <a href={`/coach/consultation/${clientConsultation.id}`} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>Modifier →</a>
+                  </div>
+                </div>
+
+                {[
+                  { label: '🎯 Objectif profond', value: clientConsultation.whyNow },
+                  { label: '📏 Objectif chiffré', value: clientConsultation.goalMeasurable },
+                  { label: '⭐ Dans 6 mois', value: clientConsultation.in6months },
+                  { label: '💪 Prête à changer', value: clientConsultation.readyToChange },
+                  { label: '🏋️ Sport', value: clientConsultation.sportType ? `${clientConsultation.sportType} · ${clientConsultation.sportFreq}` : null },
+                  { label: '📊 Mode suivi', value: clientConsultation.modeDecision },
+                  { label: '🥂 Week-end', value: clientConsultation.weekend },
+                  { label: '⚠️ Frein n°1', value: clientConsultation.mainBrake },
+                  { label: '💡 Forces / leviers', value: clientConsultation.strengths },
+                  { label: '📋 Stratégie', value: clientConsultation.strategy },
+                  { label: '✅ Prochaine action', value: clientConsultation.nextAction },
+                ].filter(item => item.value).map((item, i) => (
+                  <div key={i} className="card" style={{ padding: '12px 14px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{item.label}</div>
+                    <div style={{ fontSize: 14, lineHeight: 1.6 }}>{item.value}</div>
+                  </div>
+                ))}
+
+                {/* Journée alimentaire */}
+                {(clientConsultation.mealMorning || clientConsultation.mealLunch || clientConsultation.mealDinner) && (
+                  <div className="card">
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>🍽️ Journée alimentaire type</div>
+                    {[
+                      { label: '🌅 Matin', val: clientConsultation.mealMorning, ctx: clientConsultation.mealMorningHunger },
+                      { label: '☀️ Midi', val: clientConsultation.mealLunch, ctx: clientConsultation.mealLunchHunger },
+                      { label: '🌙 Soir', val: clientConsultation.mealDinner, ctx: clientConsultation.mealDinnerHunger },
+                      { label: '🥤 Boissons', val: clientConsultation.drinks, ctx: null },
+                    ].filter(m => m.val).map((m, i) => (
+                      <div key={i} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border-light)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{m.label}</div>
+                        <div style={{ fontSize: 13, marginTop: 2 }}>{m.val}</div>
+                        {m.ctx && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontStyle: 'italic' }}>{m.ctx}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Santé */}
+                {clientConsultation.healthNotes && (
+                  <div className="card">
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>🏥 Notes santé</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{clientConsultation.healthNotes}</div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+                <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>Aucune consultation attachée à ce client.</p>
+                <a href="/coach/consultation/new" style={{ display: 'inline-block', padding: '12px 24px', background: 'var(--primary)', color: 'white', borderRadius: 100, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                  + Nouvelle consultation
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     {photoViewer && (
       <PhotoViewer

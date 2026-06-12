@@ -15,6 +15,7 @@ export default function CoachDashboard() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [consultations, setConsultations] = useState([]);
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -30,6 +31,12 @@ export default function CoachDashboard() {
       }
     }));
     setClients(list);
+    // Charger les consultations récentes
+    const { collection: colCo, query: qCo, orderBy: obCo, limit: limCo, getDocs: gdCo } = await import('firebase/firestore');
+    const consultQ = qCo(colCo(db, 'consultations'), obCo('updatedAt', 'desc'), limCo(10));
+    const consultSnap = await gdCo(consultQ);
+    setConsultations(consultSnap.docs.map(d => d.data()));
+
     setLoading(false);
   }
 
@@ -154,6 +161,40 @@ export default function CoachDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Consultations récentes */}
+        {consultations.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 className="section-title" style={{ margin: 0 }}>📋 Consultations</h2>
+              <Link to="/coach/consultation/new" style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>+ Nouvelle</Link>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {consultations.map(c => (
+                <Link key={c.id} to={`/coach/consultation/${c.id}`} style={{ textDecoration: 'none' }}>
+                  <div className="card" style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>
+                        {c.firstName} {(c.lastName || '').toUpperCase()}
+                        {!c.firstName && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Prospect sans nom</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {c.date} · {c.finalized ? '✅ Finalisée' : '⏳ En cours'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {c.offerChosen === 'platinum' && <span style={{ fontSize: 11, background: 'var(--primary-bg)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 100, fontWeight: 700 }}>💎 Platinum</span>}
+                      {c.offerChosen === 'gold' && <span style={{ fontSize: 11, background: 'var(--warning-light)', color: 'var(--warning)', padding: '2px 8px', borderRadius: 100, fontWeight: 700 }}>🥇 Gold</span>}
+                      {c.offerChosen === 'thinking' && <span style={{ fontSize: 11, background: 'var(--border-light)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 100, fontWeight: 700 }}>🤔</span>}
+                      <span style={{ color: 'var(--text-muted)', fontSize: 16 }}>→</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

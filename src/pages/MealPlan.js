@@ -367,7 +367,9 @@ export default function MealPlan() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: activeMeal === key ? 'var(--primary)' : 'var(--text)', marginTop: 2 }}>
                   {MEAL_LABELS[key]?.label}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{mm.calories} kcal</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {profile?.coachingMode !== 'intuitif' ? `${mm.calories} kcal` : `${pct}%`}
+                </div>
               </button>
             );
           })}
@@ -376,7 +378,8 @@ export default function MealPlan() {
         {/* Détail macros + équivalences */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>
-            {MEAL_LABELS[activeMeal]?.emoji} {MEAL_LABELS[activeMeal]?.label} — {mealMacros.calories} kcal
+            {MEAL_LABELS[activeMeal]?.emoji} {MEAL_LABELS[activeMeal]?.label}
+            {profile?.coachingMode !== 'intuitif' && ` — ${mealMacros.calories} kcal`}
           </div>
 
           {/* Tabs macro */}
@@ -399,8 +402,103 @@ export default function MealPlan() {
           {(() => {
             const macro = macroTabs.find(m => m.key === activeMacro);
             const foods = allFoods[activeMacro];
+            const isIntuitif = profile?.coachingMode === 'intuitif';
 
             return (
+              <div>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  Objectif <strong style={{ color: macro.color }}>{macro.label.toLowerCase()}</strong> pour ce repas.
+                  Chaque ligne = <strong>1 portion de base</strong> et sa couverture :
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {foods.map((food, i) => {
+                    const grams = gramsForMacro(food, activeMacro, macro.amount);
+                    if (!grams || grams <= 0 || grams > 1200) return null;
+                    const kcal = kcalFor(food, grams);
+                    const calPct = Math.round((kcal / mealMacros.calories) * 100);
+
+                    // Calculer pour 1 unité de base
+                    let baseGrams, baseLabel, baseMacroPct, baseCalPct;
+                    if (food.unit === 'unité') {
+                      baseGrams = food.gramsPerUnit; // 1 œuf = 53g
+                      baseLabel = '1 unité';
+                    } else if (food.unit === 'tranche') {
+                      baseGrams = food.gramsPerUnit;
+                      baseLabel = '1 tranche';
+                    } else if (food.unit === 'c.s.') {
+                      baseGrams = food.gramsPerUnit;
+                      baseLabel = '1 c.s.';
+                    } else if (food.unit === 'c.à.c') {
+                      baseGrams = food.gramsPerUnit;
+                      baseLabel = '1 c.à.c';
+                    } else if (food.unit === 'ml') {
+                      baseGrams = food.gramsPerUnit;
+                      baseLabel = '1 c.s. (10ml)';
+                    } else if (food.unit === 'g_cru') {
+                      // Pour le riz/pâtes on montre 50g cru comme base
+                      baseGrams = 50;
+                      baseLabel = '50g cru';
+                    } else {
+                      // Pour les aliments en grammes, montrer une portion de ~100g ou la portion recommandée
+                      baseGrams = Math.min(Math.round(grams / 2 / 25) * 25, 200);
+                      baseGrams = Math.max(baseGrams, 50);
+                      baseLabel = `${baseGrams}g`;
+                    }
+
+                    const macroKey = activeMacro === 'protein' ? 'protPer100g' : activeMacro === 'carbs' ? 'glucPer100g' : 'lipPer100g';
+                    const baseMacroG = Math.round((baseGrams / 100) * food[macroKey] * 10) / 10;
+                    baseMacroPct = Math.round((baseMacroG / macro.amount) * 100);
+                    baseCalPct = Math.round((kcalFor(food, baseGrams) / mealMacros.calories) * 100);
+
+                    // Combien de cette base pour couvrir l'objectif
+                    const portions = Math.round((macro.amount / baseMacroG) * 10) / 10;
+                    const portionText = food.portionHint ? food.portionHint(grams) : `${Math.round(grams)}g`;
+
+                    // Couleur selon couverture calorique de la portion complète
+                    const calColor = calPct > 75 ? 'var(--danger)' : calPct > 50 ? 'var(--warning)' : 'var(--success)';
+
+                    return (
+                      <div key={i} style={{
+                        borderRadius: 10, border: '1px solid var(--border-light)',
+                        background: 'var(--bg)', overflow: 'hidden',
+                      }}>
+                        {/* Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border-light)' }}>
+                          <span style={{ fontSize: 22, flexShrink: 0 }}>{food.emoji}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>{food.name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{food.visual}</div>
+                          </div>
+                        </div>
+                        {/* Base unit */}
+                        <div style={{ padding: '8px 12px', background: 'white' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>1 portion de base ({baseLabel})</span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: macro.color }}>{baseMacroPct}% {activeMacro === 'protein' ? 'prot.' : activeMacro === 'carbs' ? 'gluc.' : 'lip.'}</span>
+                              {!isIntuitif && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>{baseCalPct}% cal.</span>}
+                            </div>
+                          </div>
+                          {/* Barre de progression macro */}
+                          <div style={{ height: 6, background: 'var(--border-light)', borderRadius: 3 }}>
+                            <div style={{ height: '100%', borderRadius: 3, background: macro.color, width: `${Math.min(100, baseMacroPct)}%`, transition: 'width 0.3s' }} />
+                          </div>
+                        </div>
+                        {/* Portion recommandée pour le repas */}
+                        <div style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Portion recommandée pour ce repas</span>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 800, fontSize: 13, color: macro.color }}>{portionText}</div>
+                            {!isIntuitif && <div style={{ fontSize: 10, color: calColor }}>{calPct}% des calories du repas</div>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
               <div>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                   Pour <strong style={{ color: macro.color }}>{macro.amount}g de {macro.label.toLowerCase()}</strong>

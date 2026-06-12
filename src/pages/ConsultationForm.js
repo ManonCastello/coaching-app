@@ -96,6 +96,10 @@ export default function ConsultationForm() {
   const [saved, setSaved] = useState(false);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  // ID stable pour toute la session - évite les doublons
+  const [stableId] = useState(() =>
+    consultId && consultId !== 'new' ? consultId : `consult_${Date.now()}`
+  );
 
   useEffect(() => {
     async function load() {
@@ -119,10 +123,9 @@ export default function ConsultationForm() {
   async function handleSave(finalize = false) {
     setSaving(true);
     try {
-      const id = consultId && consultId !== 'new' ? consultId : `consult_${Date.now()}`;
-      await setDoc(doc(db, 'consultations', id), {
+      await setDoc(doc(db, 'consultations', stableId), {
         ...form,
-        id,
+        id: stableId,
         finalized: finalize,
         updatedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
@@ -521,6 +524,16 @@ export default function ConsultationForm() {
             </button>
             <button className="btn btn-ghost" onClick={() => handleSave(false)} disabled={saving}>
               {saving ? '...' : '💾 Sauvegarder sans finaliser'}
+            </button>
+            <button
+              onClick={async () => {
+                if (!window.confirm('Supprimer définitivement cette consultation ?')) return;
+                const { doc: docRef, deleteDoc: del } = await import('firebase/firestore');
+                await del(docRef(db, 'consultations', stableId));
+                navigate('/coach');
+              }}
+              style={{ width: '100%', padding: '12px', background: 'none', border: '1.5px solid var(--danger)', color: 'var(--danger)', borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
+              🗑️ Supprimer cette consultation
             </button>
           </div>
         )}

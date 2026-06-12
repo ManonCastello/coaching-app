@@ -82,6 +82,18 @@ export default function CoachDashboard() {
           </div>
         </div>
 
+        {/* Bouton nouvelle consultation */}
+        <Link to="/coach/consultation/new" style={{ textDecoration: 'none', display: 'block', marginBottom: 16 }}>
+          <button style={{
+            width: '100%', padding: '14px', borderRadius: 'var(--radius-sm)',
+            border: '2px solid var(--primary)', background: 'var(--primary-bg)',
+            color: 'var(--primary)', fontFamily: 'var(--font-body)',
+            fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>
+            📋 Nouvelle consultation nutrition
+          </button>
+        </Link>
+
         <div style={{ marginBottom: 16 }}>
           <input className="input" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Rechercher..." />
         </div>

@@ -13,6 +13,7 @@ import CoachDashboard from './pages/CoachDashboard';
 import CoachClientDetail from './pages/CoachClientDetail';
 import ProgressPage from './pages/ProgressPage';
 import MealPlan from './pages/MealPlan';
+import ConsultationForm from './pages/ConsultationForm';
 
 import './styles/global.css';
 
@@ -45,6 +46,7 @@ function AppRoutes() {
       <Route path="/profile" element={<PrivateRoute><ClientProfile /></PrivateRoute>} />
       <Route path="/progress" element={<PrivateRoute><ProgressPage /></PrivateRoute>} />
       <Route path="/mealplan" element={<PrivateRoute><MealPlan /></PrivateRoute>} />
+      <Route path="/coach/consultation/:consultId" element={<PrivateRoute><ConsultationForm /></PrivateRoute>} />
 
       {/* Coach-only routes */}
       <Route path="/coach" element={<PrivateRoute requireCoach><CoachDashboard /></PrivateRoute>} />

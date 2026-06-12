@@ -355,7 +355,7 @@ export default function MealPlan() {
                               setPortions(p => ({ ...p, [food.id]: Math.round(val * 10) / 10 }));
                             }
                           }}
-                          style={{ width: 40, textAlign: 'center', fontSize: 13, fontWeight: 800, color: catColor, border: 'none', borderBottom: `1.5px solid ${catColor}`, background: 'transparent', fontFamily: 'var(--font-body)', outline: 'none' }}
+                          style={{ width: 40, textAlign: 'center', fontSize: 13, fontWeight: 800, color: catColor, border: 'none', borderBottom: '1.5px solid ' + catColor, background: 'transparent', fontFamily: 'var(--font-body)', outline: 'none' }}
                         />
                       )}
                       <button onClick={() => changeQty(food.id, 0.5)} style={{ width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${catColor}`, background: isSelected ? catColor : 'white', cursor: 'pointer', fontWeight: 700, fontSize: 16, color: isSelected ? 'white' : catColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)' }}>+</button>

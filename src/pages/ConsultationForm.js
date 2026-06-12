@@ -118,19 +118,26 @@ export default function ConsultationForm() {
 
   async function handleSave(finalize = false) {
     setSaving(true);
-    const id = consultId && consultId !== 'new' ? consultId : `consult_${Date.now()}`;
-    await setDoc(doc(db, 'consultations', id), {
-      ...form,
-      id,
-      finalized: finalize,
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    }, { merge: true });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    if (finalize) navigate('/coach');
+    try {
+      const id = consultId && consultId !== 'new' ? consultId : `consult_${Date.now()}`;
+      await setDoc(doc(db, 'consultations', id), {
+        ...form,
+        id,
+        finalized: finalize,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      }, { merge: true });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      if (finalize) {
+        navigate('/coach');
+        return;
+      }
+    } catch (e) {
+      console.error('Erreur sauvegarde:', e);
+      alert('Erreur lors de la sauvegarde. Vérifie ta connexion.');
+    }
     setSaving(false);
-    return id;
   }
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
@@ -194,7 +201,7 @@ export default function ConsultationForm() {
               <div className="input-group"><label className="input-label">Poids actuel (kg)</label><input className="input" type="number" value={form.weightCurrent} onChange={e => set('weightCurrent', e.target.value)} step="0.1" /></div>
               <div className="input-group"><label className="input-label">Taille (cm)</label><input className="input" type="number" value={form.height} onChange={e => set('height', e.target.value)} /></div>
               <div className="input-group"><label className="input-label">Poids le plus haut</label><input className="input" type="number" value={form.weightMax} onChange={e => set('weightMax', e.target.value)} step="0.1" /></div>
-              <div className="input-group"><label className="input-label">Poids où elle se sentait bien</label><input className="input" type="number" value={form.weightComfort} onChange={e => set('weightComfort', e.target.value)} step="0.1" /></div>
+              <div className="input-group"><label className="input-label">Poids où tu te sentais bien</label><input className="input" type="number" value={form.weightComfort} onChange={e => set('weightComfort', e.target.value)} step="0.1" /></div>
             </div>
             <div className="input-group"><label className="input-label">Métier</label><input className="input" value={form.job} onChange={e => set('job', e.target.value)} /></div>
             <div className="input-group"><label className="input-label">Rythme de travail / horaires / télétravail</label><textarea className="input" rows={2} value={form.workRhythm} onChange={e => set('workRhythm', e.target.value)} style={{ resize: 'none' }} /></div>
@@ -241,10 +248,10 @@ export default function ConsultationForm() {
             <div className="card" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
               <div style={{ fontSize: 12, color: '#92400E' }}>💡 <strong>Relance :</strong> Si elle répond seulement "je veux perdre X kilos" → "On garde l'objectif chiffré, mais je veux comprendre ce que ça va changer pour toi. C'est ça qui va t'aider à tenir."</div>
             </div>
-            <div className="input-group"><label className="input-label">Pourquoi elle veut changer aujourd'hui ?</label><textarea className="input" rows={4} value={form.whyNow} onChange={e => set('whyNow', e.target.value)} style={{ resize: 'none' }} /></div>
+            <div className="input-group"><label className="input-label">Pourquoi tu veux changer aujourd'hui ?</label><textarea className="input" rows={4} value={form.whyNow} onChange={e => set('whyNow', e.target.value)} style={{ resize: 'none' }} /></div>
             <div className="input-group"><label className="input-label">Objectif chiffré : poids / mensurations / vêtements / énergie</label><textarea className="input" rows={3} value={form.goalMeasurable} onChange={e => set('goalMeasurable', e.target.value)} style={{ resize: 'none' }} /></div>
-            <div className="input-group"><label className="input-label">Dans 6 mois, qu'est-ce qui lui ferait dire "ça valait le coup" ?</label><textarea className="input" rows={3} value={form.in6months} onChange={e => set('in6months', e.target.value)} style={{ resize: 'none' }} /></div>
-            <div className="input-group"><label className="input-label">Ce qu'elle est prête à changer / ce qu'elle ne veut pas sacrifier</label><textarea className="input" rows={4} value={form.readyToChange} onChange={e => set('readyToChange', e.target.value)} style={{ resize: 'none' }} /></div>
+            <div className="input-group"><label className="input-label">Dans 6 mois, qu'est-ce qui te ferait dire "ça valait le coup" ?</label><textarea className="input" rows={3} value={form.in6months} onChange={e => set('in6months', e.target.value)} style={{ resize: 'none' }} /></div>
+            <div className="input-group"><label className="input-label">Ce que tu es prête(e) à changer / ce que tu ne veux pas sacrifier</label><textarea className="input" rows={4} value={form.readyToChange} onChange={e => set('readyToChange', e.target.value)} style={{ resize: 'none' }} /></div>
           </div>
         )}
 
@@ -266,7 +273,7 @@ export default function ConsultationForm() {
               <div className="input-group"><label className="input-label">Montre / appli ?</label><input className="input" value={form.stepDevice} onChange={e => set('stepDevice', e.target.value)} /></div>
             </div>
             <div className="input-group"><label className="input-label">Douleurs / mouvements à éviter</label><input className="input" value={form.injuries} onChange={e => set('injuries', e.target.value)} /></div>
-            <div className="input-group"><label className="input-label">Ce qu'elle aime / déteste</label><textarea className="input" rows={2} value={form.sportPrefs} onChange={e => set('sportPrefs', e.target.value)} style={{ resize: 'none' }} /></div>
+            <div className="input-group"><label className="input-label">Ce que tu aimes / détestes</label><textarea className="input" rows={2} value={form.sportPrefs} onChange={e => set('sportPrefs', e.target.value)} style={{ resize: 'none' }} /></div>
             <div className="input-group"><label className="input-label">Routine sportive réaliste à court terme</label><textarea className="input" rows={3} value={form.sportPlan} onChange={e => set('sportPlan', e.target.value)} style={{ resize: 'none' }} /></div>
             {!form.sportYes && (
               <div className="card" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
@@ -336,7 +343,7 @@ export default function ConsultationForm() {
             ].map(m => (
               <div key={m.meal} className="card" style={{ padding: '12px' }}>
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{m.label}</div>
-                <textarea className="input" rows={2} value={form[m.key]} onChange={e => set(m.key, e.target.value)} placeholder="Ce qu'elle mange / boit..." style={{ resize: 'none', marginBottom: 6 }} />
+                <textarea className="input" rows={2} value={form[m.key]} onChange={e => set(m.key, e.target.value)} placeholder="Ce que tu manges / bois..." style={{ resize: 'none', marginBottom: 6 }} />
                 <input className="input" value={form[m.keyH]} onChange={e => set(m.keyH, e.target.value)} placeholder="Faim / contexte / remarques" />
               </div>
             ))}
@@ -464,7 +471,7 @@ export default function ConsultationForm() {
                 </div>
               ))}
               {[
-                { offer: 'thinking', label: '🤔 Elle veut réfléchir' },
+                { offer: 'thinking', label: '🤔 Veut réfléchir' },
                 { offer: 'no', label: '❌ Ne souhaite pas poursuivre' },
               ].map(o => (
                 <label key={o.offer} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, marginBottom: 8 }}>
@@ -484,7 +491,7 @@ export default function ConsultationForm() {
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>💬 Réponses aux objections</div>
               {[
                 { obj: '"C\'est un budget."', rep: '"Je comprends. Ce qui coûte cher aussi, c\'est de prendre un accompagnement trop léger, de ne pas s\'y tenir, puis de repartir de zéro dans deux mois."' },
-                { obj: '"Je peux essayer seule."', rep: '"Bien sûr. Mais si tu viens me voir aujourd\'hui, c\'est probablement que seule, ce n\'est pas si simple."' },
+                { obj: '"Je peux essayer seul(e)."', rep: '"Bien sûr. Mais si tu viens me voir aujourd\'hui, c\'est probablement que seul(e), ce n'est pas si simple."' },
                 { obj: '"J\'ai peur d\'être trop surveillée."', rep: '"Je ne suis pas là pour te fliquer. Je suis là pour t\'aider à rendre des comptes intelligemment."' },
               ].map((o, i) => (
                 <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: i < 2 ? '1px solid var(--border-light)' : 'none' }}>
@@ -510,10 +517,10 @@ export default function ConsultationForm() {
             </div>
 
             <button className="btn btn-primary" onClick={() => handleSave(true)} disabled={saving} style={{ marginTop: 8 }}>
-              {saving ? 'Finalisation...' : '✅ Finaliser et enregistrer'}
+              {saving ? '⏳ Sauvegarde en cours...' : '✅ Finaliser et enregistrer'}
             </button>
             <button className="btn btn-ghost" onClick={() => handleSave(false)} disabled={saving}>
-              Sauvegarder sans finaliser
+              {saving ? '...' : '💾 Sauvegarder sans finaliser'}
             </button>
           </div>
         )}

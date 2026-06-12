@@ -269,7 +269,18 @@ export default function MealPlan() {
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{food.altLabel(qty)}</span>
                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{food.altLabel(qty)}</span>
                        <button onClick={() => changeQty(id, -0.5)} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--border)', background: 'white', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)' }}>−</button>
-                       <input type="number" value={qty} step="0.1" min="0.1" onChange={e => { const val = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(val) && val > 0) setPortions(p => ({ ...p, [id]: Math.round(val * 10) / 10 })); }} style={{ width: 36, textAlign: 'center', fontSize: 13, fontWeight: 700, border: 'none', borderBottom: '1.5px solid var(--primary)', background: 'transparent', fontFamily: 'var(--font-body)', outline: 'none' }} />
+                       <input
+                         type="number"
+                         value={qty}
+                         step="0.1"
+                         min="0.1"
+                         onChange={e => {
+                           const raw = e.target.value.replace(',', '.');
+                           const val = parseFloat(raw);
+                           if (!isNaN(val) && val > 0) setPortions(p => ({ ...p, [id]: Math.round(val * 10) / 10 }));
+                         }}
+                         style={{ width: 36, textAlign: 'center', fontSize: 13, fontWeight: 700, border: 'none', borderBottom: '1.5px solid var(--primary)', background: 'transparent', fontFamily: 'var(--font-body)', outline: 'none' }}
+                       />
                        <button onClick={() => changeQty(id, 0.5)} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--primary)', background: 'var(--primary-bg)', cursor: 'pointer', fontWeight: 700, fontSize: 14, color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)' }}>+</button>
                   </div>
                 );

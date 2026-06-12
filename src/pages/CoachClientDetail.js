@@ -320,7 +320,7 @@ export default function CoachClientDetail() {
     { key: 'journal', label: '📋 Journal' },
     { key: 'bilans', label: '📅 Bilans' },
     { key: 'targets', label: '🎯 Objectifs' },
-    { key: 'consultation', label: '📋 Consulte' },
+    { key: 'consultation', label: '📋' },
   ];
 
   return (

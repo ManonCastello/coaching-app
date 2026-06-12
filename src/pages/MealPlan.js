@@ -279,7 +279,7 @@ export default function MealPlan() {
                            const val = parseFloat(raw);
                            if (!isNaN(val) && val > 0) setPortions(p => ({ ...p, [id]: Math.round(val * 10) / 10 }));
                          }}
-                         style={{ width: 36, textAlign: 'center', fontSize: 13, fontWeight: 700, border: 'none', borderBottom: '1.5px solid' + catColor  var(--primary)', background: 'transparent', fontFamily: 'var(--font-body)', outline: 'none' }}
+                         style={{ width: 36, textAlign: 'center', fontSize: 13, fontWeight: 700, border: 'none', borderBottom: '1.5px solid var(--primary)', background: 'transparent', fontFamily: 'var(--font-body)', outline: 'none' }}
                        />
                        <button onClick={() => changeQty(id, 0.5)} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--primary)', background: 'var(--primary-bg)', cursor: 'pointer', fontWeight: 700, fontSize: 14, color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)' }}>+</button>
                   </div>
@@ -363,7 +363,7 @@ export default function MealPlan() {
                   </div>
                   {isSelected && (
                     <div style={{ padding: '4px 12px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
-                      → {food.altLabel(qty)} · {Math.round((food.baseGrams * qty / 100) * food.prot * 10) / 10}g prot · {Math.round((food.baseGrams * qty / 100) * food.gluc * 10) / 10}g gluc · {Math.round((food.baseGrams * qty / 100) * food.lip * 10) / 10}g lip{!isIntuitif ? ` · ${Math.round((food.baseGrams * qty / 100) * food.kcal)} kcal` : ''}
+                      → {food.altLabel(qty)} · {Math.round((food.baseGrams * qty / 100) * food.prot * 10) / 10}g prot · {Math.round((food.baseGrams * qty / 100) * food.gluc * 10) / 10}g gluc · {Math.round((food.baseGrams * qty / 100) * food.lip * 10) / 10}g lip{!isIntuitif ? ' · ' + Math.round((food.baseGrams * qty / 100) * food.kcal) + ' kcal' : ''}
                     </div>
                   )}
                 </div>

@@ -499,47 +499,7 @@ export default function MealPlan() {
               </div>
             );
           })()}
-              <div>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-                  Pour <strong style={{ color: macro.color }}>{macro.amount}g de {macro.label.toLowerCase()}</strong>
-                  {' '}({mealMacros.calories} kcal au total pour ce repas) :
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {foods.map((food, i) => {
-                    const grams = gramsForMacro(food, activeMacro, macro.amount);
-                    if (!grams || grams <= 0 || grams > 1000) return null;
-                    const kcal = kcalFor(food, grams);
-                    const portionText = food.portionHint ? food.portionHint(grams) : `${Math.round(grams)}g`;
-                    // Indicateur : est-ce que cette source couvre bien le budget calorique ?
-                    const calPct = Math.round((kcal / mealMacros.calories) * 100);
-                    const calColor = calPct > 80 ? 'var(--danger)' : calPct > 50 ? 'var(--warning)' : 'var(--success)';
 
-                    return (
-                      <div key={i} style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '10px 12px', borderRadius: 10,
-                        background: 'var(--bg)', border: '1px solid var(--border-light)',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                          <span style={{ fontSize: 24, flexShrink: 0 }}>{food.emoji}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13 }}>{food.name}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{food.visual}</div>
-                            <div style={{ fontSize: 11, color: calColor, marginTop: 3, fontWeight: 600 }}>
-                              {kcal} kcal pour cette portion ({calPct}% du repas)
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
-                          <div style={{ fontWeight: 800, fontSize: 14, color: macro.color }}>{portionText}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
         </div>
 
         {/* Fruits */}

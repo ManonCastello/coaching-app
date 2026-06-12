@@ -691,7 +691,10 @@ export default function CoachClientDetail() {
               <div key={e.date} className="card" style={{ padding: '12px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{format(new Date(e.date), 'EEEE d MMM', { locale: fr })}</span>
-                  {e.weight && <span className="badge badge-primary">{e.weight} kg</span>}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {e.menstruation && <span title="Règles">🩸</span>}
+                    {e.weight && <span className="badge badge-primary">{e.weight} kg</span>}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🔥 {e.calories || 0} kcal</span>

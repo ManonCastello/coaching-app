@@ -44,7 +44,7 @@ export default function DailyCheckIn({ coachMode }) {
     protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '',
     didProgramSession: null,
     extraActivity: '', extraActivityCal: '',
-    notes: '',
+    notes: '', menstruation: false,
   });
 
   // Form intuitif mode — coches par repas
@@ -96,12 +96,12 @@ export default function DailyCheckIn({ coachMode }) {
           sleep: data.sleep || '', sleepQuality: data.sleepQuality || '',
           didProgramSession: data.didProgramSession ?? null,
           extraActivity: data.extraActivity || '', extraActivityCal: data.extraActivityCal || '',
-          notes: data.notes || '',
+          notes: data.notes || '', menstruation: data.menstruation || false,
         });
         if (data.goalChecks) setGoalChecks(data.goalChecks);
       } else {
         setExisting(null);
-        setForm({ weight: '', steps: '', calories: '', protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '', didProgramSession: null, extraActivity: '', extraActivityCal: '', notes: '' });
+        setForm({ weight: '', steps: '', calories: '', protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '', didProgramSession: null, extraActivity: '', extraActivityCal: '', notes: '', menstruation: false });
         setGoalChecks({});
       }
 
@@ -146,6 +146,7 @@ export default function DailyCheckIn({ coachMode }) {
         extraActivity: form.extraActivity,
         extraActivityCal: form.extraActivityCal ? +form.extraActivityCal : 0,
         notes: form.notes,
+        menstruation: form.menstruation || false,
         goalChecks,
         updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -523,6 +524,31 @@ export default function DailyCheckIn({ coachMode }) {
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>📝 Notes du jour</div>
           <textarea className="input" value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Comment tu te sens ?" rows={3} style={{ resize: 'none' }} />
         </div>
+
+        {/* Règles — femmes uniquement */}
+        {profile?.sex === 'F' && (
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>🩸 Cycle menstruel</div>
+            <button
+              type="button"
+              onClick={() => set('menstruation', !form.menstruation)}
+              style={{
+                width: '100%', padding: '14px', borderRadius: 'var(--radius-sm)',
+                border: `2px solid ${form.menstruation ? '#EC4899' : 'var(--border)'}`,
+                background: form.menstruation ? '#FDF2F8' : 'white',
+                color: form.menstruation ? '#EC4899' : 'var(--text-muted)',
+                fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 14,
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}>
+              {form.menstruation ? '🩸 Règles aujourd\'hui ✅' : '○ Pas de règles aujourd\'hui'}
+            </button>
+            {form.menstruation && (
+              <p style={{ fontSize: 12, color: '#EC4899', marginTop: 8, textAlign: 'center' }}>
+                Noté — les fluctuations de poids sont normales ces jours-ci 💙
+              </p>
+            )}
+          </div>
+        )}
 
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
           {saving ? 'Enregistrement...' : '✅ Enregistrer le suivi'}

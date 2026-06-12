@@ -373,7 +373,8 @@ export default function ClientDashboard() {
                     <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>
                       {new Date(entry.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {entry.menstruation && <span title="Règles">🩸</span>}
                       {entry.didProgramSession === true && <span style={{ fontSize: 11, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>🏋️ Séance</span>}
                       {entry.didProgramSession === false && <span style={{ fontSize: 11, background: 'var(--danger-light)', color: 'var(--danger)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>❌ Séance</span>}
                     </div>

@@ -359,6 +359,11 @@ export default function DailyCheckIn({ coachMode }) {
                   if (diff > 0) return <p style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6, fontWeight: 600 }}>⚠️ +{diff} kcal à réguler sur les prochains jours</p>;
                   return <p style={{ fontSize: 12, color: 'var(--primary)', marginTop: 6, fontWeight: 600 }}>Il te reste {Math.abs(diff)} kcal à manger aujourd'hui</p>;
                 })()}
+                {weekBalance !== null && weekBalance !== 0 && (
+                  <p style={{ fontSize: 12, marginTop: 4, fontWeight: 600, color: weekBalance > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                    Balance semaine : {weekBalance > 0 ? '+' : ''}{weekBalance} kcal {weekBalance > 0 ? 'à réguler' : 'de marge'}
+                  </p>
+                )}
               </div>
             )}
             <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 14 }}>

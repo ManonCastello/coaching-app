@@ -132,11 +132,20 @@ export default function DailyCheckIn({ coachMode }) {
   async function handleSave() {
     setSaving(true);
     try {
+      const t = profile?.targets || {};
+      const calories = form.calories ? +form.calories : 0;
+      const steps = form.steps ? +form.steps : 0;
+      const extraActivityCal = form.extraActivityCal ? +form.extraActivityCal : 0;
+      const stepBonus = Math.round(((steps - (t.steps || 10000)) / 1000) * (t.kcalPer1000Steps || 20));
+      const sessionDef = form.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+      const dailyTarget = (t.calories || 2000) + stepBonus + extraActivityCal + sessionDef;
+      const dailyBalance = calories > 0 ? calories - dailyTarget : null;
+
       await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate), {
         date: targetDate,
         weight: form.weight ? +form.weight : null,
-        steps: form.steps ? +form.steps : 0,
-        calories: form.calories ? +form.calories : 0,
+        steps,
+        calories,
         protein: form.protein ? +form.protein : 0,
         carbs: form.carbs ? +form.carbs : 0,
         fat: form.fat ? +form.fat : 0,
@@ -144,10 +153,12 @@ export default function DailyCheckIn({ coachMode }) {
         sleepQuality: form.sleepQuality ? +form.sleepQuality : null,
         didProgramSession: form.didProgramSession,
         extraActivity: form.extraActivity,
-        extraActivityCal: form.extraActivityCal ? +form.extraActivityCal : 0,
+        extraActivityCal,
         notes: form.notes,
         menstruation: form.menstruation || false,
         goalChecks,
+        dailyTarget,
+        dailyBalance,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setSaved(true);

@@ -70,37 +70,24 @@ export default function ClientDashboard() {
       if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
       if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
-      // Balance calorique (mode tracking uniquement)
+      // Balance calorique — utilise la valeur figée stockée à la sauvegarde
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
-
-        // Charger l'historique des targets en une seule requête
-        const histSnap = await getDocs(query(
-          collection(db, 'clients', currentUser.uid, 'targetsHistory'),
-          orderBy('validFrom', 'asc')
-        ));
-        const history = histSnap.docs.map(d => d.data());
-
-        function getTargetsSync(date) {
-          if (!history.length) return p.targets || {};
-          let applicable = null;
-          for (const entry of history) {
-            if (entry.validFrom <= date) applicable = entry;
-            else break;
-          }
-          return applicable || p.targets || {};
-        }
-
-        const t0 = p.targets || {};
         let totalDiff = 0;
         entries.forEach(e => {
-          if (e.date >= weekKey && e.calories) {
-            const t = history.length ? getTargetsSync(e.date) : t0;
-            const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
-            const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
-            const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
-            const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
-            totalDiff += (e.calories - target);
+          if (e.date >= weekKey) {
+            if (e.dailyBalance !== null && e.dailyBalance !== undefined) {
+              // Valeur figée au moment de la sauvegarde
+              totalDiff += e.dailyBalance;
+            } else if (e.calories) {
+              // Fallback pour les anciennes entrées sans dailyBalance
+              const t = p.targets || {};
+              const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
+              const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+              const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
+              const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+              totalDiff += (e.calories - target);
+            }
           }
         });
         setWeekBalance(Math.round(totalDiff + resetOffset));

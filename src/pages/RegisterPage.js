@@ -149,6 +149,18 @@ export default function RegisterPage() {
         coachingMode: form.coachingMode || 'tracking',
         createdAt: serverTimestamp(),
       });
+
+      // Sauvegarder les targets initiales dans l'historique
+      const today = new Date().toISOString().split('T')[0];
+      await setDoc(doc(db, 'clients', uid, 'targetsHistory', today), {
+        calories: calorieTarget,
+        protein: macros.protein, fat: macros.fat, carbs: macros.carbs,
+        steps: +form.stepGoal, sleep: +form.sleepGoal,
+        sessionsPerWeek: +form.sessionsPerWeek,
+        kcalPer1000Steps: 20,
+        sessionCalorieDeficit: 300,
+        validFrom: today,
+      });
       navigate('/dashboard');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') setError('Cet email est déjà utilisé');

@@ -73,10 +73,29 @@ export default function ClientDashboard() {
       // Balance calorique (mode tracking uniquement)
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
-        const t = p.targets || {};
+
+        // Charger l'historique des targets en une seule requête
+        const histSnap = await getDocs(query(
+          collection(db, 'clients', currentUser.uid, 'targetsHistory'),
+          orderBy('validFrom', 'asc')
+        ));
+        const history = histSnap.docs.map(d => d.data());
+
+        function getTargetsSync(date) {
+          if (!history.length) return p.targets || {};
+          let applicable = null;
+          for (const entry of history) {
+            if (entry.validFrom <= date) applicable = entry;
+            else break;
+          }
+          return applicable || p.targets || {};
+        }
+
+        const t0 = p.targets || {};
         let totalDiff = 0;
         entries.forEach(e => {
           if (e.date >= weekKey && e.calories) {
+            const t = history.length ? getTargetsSync(e.date) : t0;
             const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
             const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
             const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;

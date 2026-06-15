@@ -71,19 +71,19 @@ export default function ClientDashboard() {
       if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
       // Balance calorique (mode tracking uniquement, sans appels Firestore par entrée)
-      if (p.coachingMode !== 'intuitif') {
+      if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
-        const t = p.targets || {};
         let totalDiff = 0;
-        entries.forEach(e => {
+        for (const e of entries) {
           if (e.date >= weekKey && e.calories) {
+            const t = await getTargetsForDate(currentUser.uid, e.date, p.targets || {});
             const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
             const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
             const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
             const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
             totalDiff += (e.calories - target);
           }
-        });
+        }
         setWeekBalance(Math.round(totalDiff + resetOffset));
       }
     } catch (e) {
@@ -123,7 +123,8 @@ export default function ClientDashboard() {
   const stepBonus = Math.round(((todaySteps - (targets?.steps || 10000)) / 1000) * (targets?.kcalPer1000Steps || 20));
   const sessionAdj = todayEntry?.didProgramSession === false ? -(targets?.sessionCalorieDeficit || 300) : 0;
   const extraCal = todayEntry?.extraActivityCal || 0;
-  const adjustedCalories = (targets?.calories || 2000) + stepBonus + sessionAdj + extraCal;
+  const baseCalories = targets?.calories || 2000;
+  const adjustedCalories = baseCalories + (todayEntry ? stepBonus + sessionAdj + extraCal : 0);
   const caloriePct = Math.min(100, Math.round((todayCalories / adjustedCalories) * 100));
   const stepPct = Math.min(100, Math.round((todaySteps / (targets?.steps || 10000)) * 100));
 
@@ -206,16 +207,15 @@ export default function ClientDashboard() {
             <div className="stat-label">Poids du jour</div>
             <div className="stat-value" style={{ color: 'var(--primary)' }}>{todayWeight || '—'}<span className="stat-unit">kg</span></div>
           </div>
-          {/* Balance semaine : tracking uniquement */}
-          {(profile.coachingMode || 'tracking') !== 'intuitif' && (
-            <div className="stat-card" style={{ border: `1.5px solid ${balanceColor}20` }}>
+          {(profile.coachingMode || 'tracking') !== 'intuitif' && weekBalance !== null && (
+            <div className="stat-card" style={{ border: '1.5px solid ' + balanceColor + '20' }}>
               <div className="stat-label">Balance semaine</div>
               <div className="stat-value" style={{ color: balanceColor, fontSize: 20 }}>
-                {weekBalance !== null ? `${weekBalance > 0 ? '+' : ''}${weekBalance}` : '—'}
+                {weekBalance > 0 ? '+' : ''}{weekBalance}
                 <span className="stat-unit">kcal</span>
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
-                {weekBalance === null ? '' : weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
+                {weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
               </div>
             </div>
           )}

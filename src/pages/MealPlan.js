@@ -291,7 +291,7 @@ export default function MealPlan() {
 
         {/* Constructeur — sélection aliments */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>➕ Composer mon repas</div>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>+ Composer mon repas</div>
 
           {/* Tabs catégories */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>

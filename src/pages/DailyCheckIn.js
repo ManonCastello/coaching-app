@@ -353,6 +353,12 @@ export default function DailyCheckIn({ coachMode }) {
                   {extraCal > 0 && <span style={{ color: 'var(--success)' }}>Activité: +{extraCal}</span>}
                   {sessionAdj !== 0 && <span style={{ color: 'var(--danger)' }}>Séance: {sessionAdj}</span>}
                 </div>
+                {(() => {
+                  const diff = +form.calories - adjustedTarget;
+                  if (diff === 0) return <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 6, fontWeight: 600 }}>✅ Objectif atteint pile !</p>;
+                  if (diff > 0) return <p style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6, fontWeight: 600 }}>⚠️ +{diff} kcal à réguler sur les prochains jours</p>;
+                  return <p style={{ fontSize: 12, color: 'var(--primary)', marginTop: 6, fontWeight: 600 }}>Il te reste {Math.abs(diff)} kcal à manger aujourd'hui</p>;
+                })()}
               </div>
             )}
             <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 14 }}>

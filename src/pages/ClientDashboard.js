@@ -70,20 +70,20 @@ export default function ClientDashboard() {
       if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
       if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
-      // Balance calorique (mode tracking uniquement, sans appels Firestore par entrée)
+      // Balance calorique (mode tracking uniquement)
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
+        const t = p.targets || {};
         let totalDiff = 0;
-        for (const e of entries) {
+        entries.forEach(e => {
           if (e.date >= weekKey && e.calories) {
-            const t = await getTargetsForDate(currentUser.uid, e.date, p.targets || {});
             const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
             const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
             const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
             const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
             totalDiff += (e.calories - target);
           }
-        }
+        });
         setWeekBalance(Math.round(totalDiff + resetOffset));
       }
     } catch (e) {

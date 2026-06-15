@@ -354,10 +354,44 @@ export default function DailyCheckIn({ coachMode }) {
                   {sessionAdj !== 0 && <span style={{ color: 'var(--danger)' }}>Séance: {sessionAdj}</span>}
                 </div>
                 {(() => {
+                  const prevBalance = weekBalance || 0; // balance AVANT aujourd'hui
                   const diff = +form.calories - adjustedTarget;
-                  if (diff === 0) return <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 6, fontWeight: 600 }}>✅ Objectif atteint pile !</p>;
-                  if (diff > 0) return <p style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6, fontWeight: 600 }}>⚠️ +{diff} kcal à réguler sur les prochains jours</p>;
-                  return <p style={{ fontSize: 12, color: 'var(--primary)', marginTop: 6, fontWeight: 600 }}>Il te reste {Math.abs(diff)} kcal à manger aujourd'hui</p>;
+
+                  if (prevBalance > 0) {
+                    // Il y a de la régulation en cours
+                    const regulated = Math.min(Math.abs(diff > 0 ? 0 : diff), prevBalance);
+                    const remaining = prevBalance - Math.max(0, -diff);
+                    if (diff < 0) {
+                      // Mange moins → régule
+                      return (
+                        <div style={{ marginTop: 6 }}>
+                          <p style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600 }}>
+                            ✅ Tu régules {Math.abs(diff)} kcal — il te reste {Math.max(0, remaining)} kcal à réguler
+                          </p>
+                        </div>
+                      );
+                    } else if (diff > 0) {
+                      // Mange plus → creuse encore la balance
+                      return (
+                        <div style={{ marginTop: 6 }}>
+                          <p style={{ fontSize: 12, color: 'var(--warning)', fontWeight: 600 }}>
+                            ⚠️ +{diff} kcal s'ajoutent — balance totale : +{prevBalance + diff} kcal à réguler
+                          </p>
+                        </div>
+                      );
+                    } else {
+                      return <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontWeight: 600 }}>Objectif atteint — balance : +{prevBalance} kcal à réguler</p>;
+                    }
+                  } else {
+                    // Pas de régulation
+                    if (diff === 0) return <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 6, fontWeight: 600 }}>✅ Objectif atteint pile !</p>;
+                    if (diff > 0) return <p style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6, fontWeight: 600 }}>⚠️ +{diff} kcal à réguler sur les prochains jours</p>;
+                    return (
+                      <p style={{ fontSize: 12, color: 'var(--primary)', marginTop: 6, fontWeight: 600 }}>
+                        Il te reste {Math.abs(diff)} kcal à manger — ou {Math.abs(diff)} kcal de crédit sur ta balance
+                      </p>
+                    );
+                  }
                 })()}
                 {weekBalance !== null && weekBalance !== 0 && (
                   <p style={{ fontSize: 12, marginTop: 4, fontWeight: 600, color: weekBalance > 0 ? 'var(--warning)' : 'var(--success)' }}>

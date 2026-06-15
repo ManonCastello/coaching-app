@@ -61,6 +61,7 @@ export default function DailyCheckIn({ coachMode }) {
   }
 
   const [weekBalance, setWeekBalance] = useState(null);
+  const [isLocked, setIsLocked] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -99,6 +100,7 @@ export default function DailyCheckIn({ coachMode }) {
           notes: data.notes || '', menstruation: data.menstruation || false,
         });
         if (data.goalChecks) setGoalChecks(data.goalChecks);
+        setIsLocked(data.locked || false);
       } else {
         setExisting(null);
         setForm({ weight: '', steps: '', calories: '', protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '', didProgramSession: null, extraActivity: '', extraActivityCal: '', notes: '', menstruation: false });
@@ -129,7 +131,30 @@ export default function DailyCheckIn({ coachMode }) {
     load();
   }, [currentUser.uid, targetDate]);
 
+  async function handleLock() {
+    if (!window.confirm('Valider définitivement cette journée ? Les valeurs seront figées.')) return;
+    const t = profile?.targets || {};
+    const calories = form.calories ? +form.calories : 0;
+    const steps = form.steps ? +form.steps : 0;
+    const extraActivityCal = form.extraActivityCal ? +form.extraActivityCal : 0;
+    const stepBonus = Math.round(((steps - (t.steps || 10000)) / 1000) * (t.kcalPer1000Steps || 20));
+    const sessionDef = form.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+    const dailyTarget = (t.calories || 2000) + stepBonus + extraActivityCal + sessionDef;
+    const dailyBalance = calories > 0 ? calories - dailyTarget : null;
+    await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate), {
+      locked: true,
+      dailyTarget,
+      dailyBalance,
+      lockedAt: serverTimestamp(),
+    }, { merge: true });
+    setIsLocked(true);
+  }
+
   async function handleSave() {
+    if (isLocked) {
+      alert('Cette journée est validée. Contacte ta coach pour la déverrouiller.');
+      return;
+    }
     setSaving(true);
     try {
       const t = profile?.targets || {};
@@ -249,8 +274,18 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
+        {/* Bandeau journée validée */}
+        {isLocked && (
+          <div style={{ background: '#F0FDF4', border: '1.5px solid #22C55E', borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#16A34A' }}>🔒 Journée validée</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Les valeurs sont figées. Contacte ta coach pour modifier.</div>
+            </div>
+          </div>
+        )}
+
         {saved && <div className="alert alert-success">✅ Suivi enregistré !</div>}
-        {existing && !saved && (
+        {existing && !saved && !isLocked && (
           <div style={{ background: 'var(--primary-bg)', border: '1px solid var(--primary-light)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--primary)' }}>
             ✏️ Données existantes — tu peux les modifier.
           </div>
@@ -606,9 +641,17 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Enregistrement...' : '✅ Enregistrer le suivi'}
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving || isLocked}>
+          {saving ? 'Enregistrement...' : isLocked ? '🔒 Journée validée' : '✅ Enregistrer le suivi'}
         </button>
+
+        {!isLocked && existing && (
+          <button
+            onClick={handleLock}
+            style={{ width: '100%', padding: '12px', marginTop: 10, background: 'none', border: '1.5px solid #22C55E', color: '#16A34A', borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            🔒 Valider définitivement la journée
+          </button>
+        )}
       </div>
 
       {!coachMode && <TabBar />}

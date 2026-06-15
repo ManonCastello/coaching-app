@@ -696,12 +696,38 @@ export default function CoachClientDetail() {
         {activeTab === 'journal' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[...entries].reverse().map(e => (
-              <div key={e.date} className="card" style={{ padding: '12px 14px' }}>
+              <div key={e.date} className="card" style={{ padding: '12px 14px', border: e.locked ? '1.5px solid #22C55E' : undefined }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{format(new Date(e.date), 'EEEE d MMM', { locale: fr })}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{format(new Date(e.date), 'EEEE d MMM', { locale: fr })}</span>
+                    {e.locked && <span style={{ fontSize: 10, background: '#F0FDF4', color: '#16A34A', padding: '1px 6px', borderRadius: 100, fontWeight: 700 }}>🔒 Validée</span>}
+                  </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     {e.menstruation && <span title="Règles">🩸</span>}
                     {e.weight && <span className="badge badge-primary">{e.weight} kg</span>}
+                    {/* Bouton lock/unlock coach */}
+                    <button
+                      onClick={async () => {
+                        const { doc: d, setDoc: sd, serverTimestamp: st } = await import('firebase/firestore');
+                        if (e.locked) {
+                          await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: false }, { merge: true });
+                        } else {
+                          const t = client.targets || {};
+                          const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
+                          const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+                          const extraCal = e.extraActivityCal || 0;
+                          const dailyTarget = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+                          const dailyBalance = e.calories > 0 ? e.calories - dailyTarget : null;
+                          await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: true, dailyTarget, dailyBalance, lockedAt: st() }, { merge: true });
+                        }
+                        // Recharger les entrées
+                        window.location.reload();
+                      }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
+                      title={e.locked ? 'Déverrouiller' : 'Valider la journée'}
+                    >
+                      {e.locked ? '🔓' : '🔒'}
+                    </button>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
@@ -713,6 +739,11 @@ export default function CoachClientDetail() {
                     </span>
                   )}
                   {e.extraActivity && <span style={{ fontSize: 12, color: 'var(--primary)' }}>🏃 +{e.extraActivityCal} kcal</span>}
+                  {e.dailyBalance !== null && e.dailyBalance !== undefined && (
+                    <span style={{ fontSize: 12, fontWeight: 700, color: e.dailyBalance > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                      Balance: {e.dailyBalance > 0 ? '+' : ''}{e.dailyBalance} kcal
+                    </span>
+                  )}
                 </div>
                 {e.notes && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>"{e.notes}"</p>}
               </div>

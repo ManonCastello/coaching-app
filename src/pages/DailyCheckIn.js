@@ -107,37 +107,14 @@ export default function DailyCheckIn({ coachMode }) {
         setGoalChecks({});
       }
 
-      // Balance calorique (mode tracking uniquement) — exclut le jour J, filtre par semaine, applique resetOffset
+      // Balance = dailyBalance du dernier jour verrouillé (contient déjà le cumul)
       if (profileData?.coachingMode !== 'intuitif') {
         const today = format(new Date(), 'yyyy-MM-dd');
-        const currentWeekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-        const [entriesSnap, resetDoc] = await Promise.all([
-          getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7))),
-          getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', currentWeekKey)),
-        ]);
-        const entries = entriesSnap.docs.map(d => d.data()).filter(e => e.date >= currentWeekKey && e.date !== today);
-        const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
-        const t = profileData?.targets || {};
-        let totalDiff = 0;
-        entries.forEach(e => {
-          if (e.dailyBalance !== null && e.dailyBalance !== undefined) {
-            totalDiff += e.dailyBalance;
-          } else if (e.calories) {
-            let target;
-            if (e.locked && e.dailyTarget != null) {
-              target = e.dailyTarget;
-            } else {
-              const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
-              const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
-              const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
-              target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
-            }
-            totalDiff += (e.calories - target);
-          }
-        });
-        setWeekBalance(Math.round(totalDiff + resetOffset));
+        const entriesSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(14)));
+        const entries = entriesSnap.docs.map(d => d.data()).filter(e => e.date !== today);
+        const lastLocked = entries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
+        setWeekBalance(lastLocked ? Math.round(lastLocked.dailyBalance) : 0);
       }
-
       setLoading(false);
     }
     load();
@@ -152,7 +129,8 @@ export default function DailyCheckIn({ coachMode }) {
     const stepBonus = Math.round(((steps - (t.steps || 10000)) / 1000) * (t.kcalPer1000Steps || 20));
     const sessionDef = form.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
     const dailyTarget = (t.calories || 2000) + stepBonus + extraActivityCal + sessionDef;
-    const dailyBalance = calories > 0 ? calories - dailyTarget : null;
+    const carryOver = weekBalance || 0;
+    const dailyBalance = calories > 0 ? (calories - dailyTarget) + carryOver : null;
     await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate), {
       locked: true,
       dailyTarget,
@@ -176,7 +154,8 @@ export default function DailyCheckIn({ coachMode }) {
       const stepBonus = Math.round(((steps - (t.steps || 10000)) / 1000) * (t.kcalPer1000Steps || 20));
       const sessionDef = form.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
       const dailyTarget = (t.calories || 2000) + stepBonus + extraActivityCal + sessionDef;
-      const dailyBalance = calories > 0 ? calories - dailyTarget : null;
+      const carryOver = weekBalance || 0;
+      const dailyBalance = calories > 0 ? (calories - dailyTarget) + carryOver : null;
 
       await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate), {
         date: targetDate,
@@ -399,50 +378,28 @@ export default function DailyCheckIn({ coachMode }) {
                   {sessionAdj !== 0 && <span style={{ color: 'var(--danger)' }}>Séance: {sessionAdj}</span>}
                 </div>
                 {(() => {
-                  const prevBalance = weekBalance || 0; // balance AVANT aujourd'hui
-                  const diff = +form.calories - adjustedTarget;
+                  if (!form.calories) return null;
+                  const todayDiff = +form.calories - adjustedTarget; // écart du jour
+                  const carryOver = weekBalance || 0; // report des jours précédents verrouillés
+                  const totalBalance = todayDiff + carryOver; // balance totale avec report
 
-                  if (prevBalance > 0) {
-                    // Il y a de la régulation en cours
-                    const regulated = Math.min(Math.abs(diff > 0 ? 0 : diff), prevBalance);
-                    const remaining = prevBalance - Math.max(0, -diff);
-                    if (diff < 0) {
-                      // Mange moins → régule
-                      return (
-                        <div style={{ marginTop: 6 }}>
-                          <p style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600 }}>
-                            ✅ Tu régules {Math.abs(diff)} kcal — il te reste {Math.max(0, remaining)} kcal à réguler
-                          </p>
-                        </div>
-                      );
-                    } else if (diff > 0) {
-                      // Mange plus → creuse encore la balance
-                      return (
-                        <div style={{ marginTop: 6 }}>
-                          <p style={{ fontSize: 12, color: 'var(--warning)', fontWeight: 600 }}>
-                            ⚠️ +{diff} kcal s'ajoutent — balance totale : +{prevBalance + diff} kcal à réguler
-                          </p>
-                        </div>
-                      );
-                    } else {
-                      return <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontWeight: 600 }}>Objectif atteint — balance : +{prevBalance} kcal à réguler</p>;
-                    }
-                  } else {
-                    // Pas de régulation
-                    if (diff === 0) return <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 6, fontWeight: 600 }}>✅ Objectif atteint pile !</p>;
-                    if (diff > 0) return <p style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6, fontWeight: 600 }}>⚠️ +{diff} kcal à réguler sur les prochains jours</p>;
-                    return (
-                      <p style={{ fontSize: 12, color: 'var(--primary)', marginTop: 6, fontWeight: 600 }}>
-                        Il te reste {Math.abs(diff)} kcal à manger — ou {Math.abs(diff)} kcal de crédit sur ta balance
+                  const color = totalBalance > 100 ? 'var(--warning)' : totalBalance < -100 ? 'var(--success)' : 'var(--primary)';
+                  const sign = totalBalance > 0 ? '+' : '';
+
+                  return (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {carryOver !== 0 && (
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                          Report veille : {carryOver > 0 ? '+' : ''}{carryOver} kcal
+                        </p>
+                      )}
+                      <p style={{ fontSize: 13, color, fontWeight: 700 }}>
+                        Balance du jour : {sign}{totalBalance} kcal
+                        {totalBalance > 100 ? ' — à réguler' : totalBalance < -100 ? ' — crédit 🎯' : ' — dans la cible ✅'}
                       </p>
-                    );
-                  }
+                    </div>
+                  );
                 })()}
-                {weekBalance !== null && weekBalance !== 0 && (
-                  <p style={{ fontSize: 12, marginTop: 4, fontWeight: 600, color: weekBalance > 0 ? 'var(--warning)' : 'var(--success)' }}>
-                    Balance semaine : {weekBalance > 0 ? '+' : ''}{weekBalance} kcal {weekBalance > 0 ? 'à réguler' : 'de marge'}
-                  </p>
-                )}
               </div>
             )}
             <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 14 }}>

@@ -107,11 +107,12 @@ export default function DailyCheckIn({ coachMode }) {
         setGoalChecks({});
       }
 
-      // Balance calorique (mode tracking uniquement)
+      // Balance calorique (mode tracking uniquement) — exclut le jour J
       if (profileData?.coachingMode !== 'intuitif') {
+        const today = format(new Date(), 'yyyy-MM-dd');
         const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
         const snap = await getDocs(q);
-        const entries = snap.docs.map(d => d.data());
+        const entries = snap.docs.map(d => d.data()).filter(e => e.date !== today);
         const t = profileData?.targets || {};
         let totalDiff = 0;
         entries.forEach(e => {

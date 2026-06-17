@@ -73,9 +73,10 @@ export default function ClientDashboard() {
       // Balance calorique — utilise la valeur figée stockée à la sauvegarde
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
         let totalDiff = 0;
         entries.forEach(e => {
-          if (e.date >= weekKey) {
+          if (e.date >= weekKey && e.date !== todayStr) {
             if (e.dailyBalance !== null && e.dailyBalance !== undefined) {
               // Valeur figée au moment de la sauvegarde
               totalDiff += e.dailyBalance;

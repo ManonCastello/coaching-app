@@ -271,7 +271,7 @@ export default function CoachClientDetail() {
   async function saveWeekGoals() {
     setSavingGoals(true);
     const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    const goals = Object.entries(goalsForm).map(([key, val]) => ({ key, ...val }));
+    const goals = Object.entries(goalsForm).filter(([, val]) => val.active).map(([key, val]) => ({ key, ...val }));
     await setDoc(doc(db, 'clients', clientId, 'weekGoals', weekKey), {
       weekStart: weekKey,
       goals,

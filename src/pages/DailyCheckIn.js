@@ -116,10 +116,17 @@ export default function DailyCheckIn({ coachMode }) {
         let totalDiff = 0;
         entries.forEach(e => {
           if (e.calories) {
-            const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
-            const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
-            const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
-            const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+            let target;
+            if (e.locked && e.dailyTarget != null) {
+              // Journée verrouillée : utiliser le target sauvegardé au moment du lock
+              target = e.dailyTarget;
+            } else {
+              // Journée non verrouillée : calculer avec les targets actuels
+              const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
+              const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+              const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
+              target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+            }
             totalDiff += (e.calories - target);
           }
         });
@@ -259,8 +266,8 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
-        {/* Résumé objectifs du jour — mode intuitif */}
-        {isIntuitif && weekGoals?.goals?.some(g => g.active) && (
+        {/* Résumé objectifs du jour — tous modes */}
+        {weekGoals?.goals?.some(g => g.active) && (
           <div style={{
             background: checks.total > 0 && checks.done === checks.total ? 'var(--success-light)' : 'var(--primary-bg)',
             border: `1px solid ${checks.total > 0 && checks.done === checks.total ? 'var(--success)' : 'var(--primary-light)'}`,
@@ -468,8 +475,8 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
-        {/* ───── MODE INTUITIF ───── */}
-        {isIntuitif && weekGoals?.goals?.some(g => g.active) && (
+        {/* ───── OBJECTIFS HEBDO (tous modes) ───── */}
+        {weekGoals?.goals?.some(g => g.active) && (
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>🎯 Objectifs du jour</div>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Coche ce que tu as respecté à chaque repas.</p>

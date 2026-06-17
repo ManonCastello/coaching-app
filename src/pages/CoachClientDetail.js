@@ -152,10 +152,15 @@ export default function CoachClientDetail() {
     let totalDiff = 0;
     entries.forEach(e => {
       if (e.date >= weekKey && e.calories) {
-        const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
-        const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
-        const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
-        const target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+        let target;
+        if (e.locked && e.dailyTarget != null) {
+          target = e.dailyTarget;
+        } else {
+          const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
+          const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+          const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
+          target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+        }
         totalDiff += (e.calories - target);
       }
     });
@@ -754,6 +759,30 @@ export default function CoachClientDetail() {
         {/* BILANS */}
         {activeTab === 'bilans' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Mensurations de départ pour référence */}
+            {client.startMeasurements && (
+              <div className="card" style={{ background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>📐 Mensurations de départ</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                  {client.startWeight && (
+                    <div style={{ fontSize: 12, padding: '4px 10px', background: 'white', borderRadius: 100, border: '1px solid var(--primary-light)' }}>
+                      ⚖️ Poids: <strong>{client.startWeight} kg</strong>
+                    </div>
+                  )}
+                  {[
+                    { key: 'waist', label: 'Taille', emoji: '👗' },
+                    { key: 'hips', label: 'Hanches', emoji: '🔵' },
+                    { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+                    { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+                    { key: 'arms', label: 'Bras', emoji: '💪' },
+                  ].filter(m => client.startMeasurements[m.key]).map(m => (
+                    <div key={m.key} style={{ fontSize: 12, padding: '4px 10px', background: 'white', borderRadius: 100, border: '1px solid var(--primary-light)' }}>
+                      {m.emoji} {m.label}: <strong>{client.startMeasurements[m.key]} cm</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {[...weeklyEntries].reverse().map(w => (
               <div key={w.weekStart} className="card">
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
@@ -779,6 +808,34 @@ export default function CoachClientDetail() {
                 {w.weekHighlight && <div style={{ fontSize: 12, color: 'var(--success)', marginBottom: 3 }}>✨ {w.weekHighlight}</div>}
                 {w.weekDifficulty && <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 3 }}>⚠️ {w.weekDifficulty}</div>}
                 {w.weekNotes && <div style={{ fontSize: 12, color: 'var(--primary)' }}>💬 {w.weekNotes}</div>}
+                {w.measurements && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-light)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>📏 Mensurations</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {[
+                        { key: 'waist', label: 'Taille', emoji: '👗' },
+                        { key: 'hips', label: 'Hanches', emoji: '🔵' },
+                        { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+                        { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+                        { key: 'arms', label: 'Bras', emoji: '💪' },
+                      ].filter(m => w.measurements[m.key]).map(m => {
+                        const startVal = client.startMeasurements?.[m.key];
+                        const val = w.measurements[m.key];
+                        const delta = startVal ? +(val - startVal).toFixed(1) : null;
+                        return (
+                          <div key={m.key} style={{ fontSize: 12, padding: '4px 10px', background: 'var(--bg)', borderRadius: 100 }}>
+                            {m.emoji} {m.label}: <strong>{val} cm</strong>
+                            {delta !== null && (
+                              <span style={{ marginLeft: 4, fontWeight: 700, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                                ({delta > 0 ? '+' : ''}{delta})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -866,9 +923,9 @@ export default function CoachClientDetail() {
               )}
             </div>
 
-            {/* Objectifs hebdo intuitifs */}
+            {/* Objectifs hebdo — disponibles dans tous les modes */}
             <div className="card">
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🎯 Objectifs hebdo (mode sans comptage)</div>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🎯 Objectifs hebdo</div>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
                 Active les objectifs de cette semaine. Ils s'affichent dans le suivi quotidien du client sous forme de cases à cocher par repas.
               </p>

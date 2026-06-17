@@ -379,16 +379,34 @@ export default function MealPlan() {
 
         {/* Fruits */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Fruits - 2 a 3 / jour</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            ~180 kcal deduits de ton objectif · 1 fruit = 50-80 kcal · Pas en jus
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🍎 Fruits — 2 à 3 / jour</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px', background: '#FEF3C7', borderRadius: 10 }}>
+            <span style={{ fontSize: 28 }}>🍎</span>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              ~180 kcal déjà déduits de ton objectif journalier · 1 fruit = 50–80 kcal · Pas en jus
+            </div>
           </div>
         </div>
 
         {/* Hydratation */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>💧 Hydratation</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px', background: '#EFF6FF', borderRadius: 10 }}>
+            <span style={{ fontSize: 28 }}>💧</span>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              1,5 à 2L d'eau par jour minimum<br />
+              Plus les jours de sport · Commence chaque repas par un grand verre<br />
+              Thé/café sans sucre comptent · Pas de boissons sucrées
+            </div>
+          </div>
+        </div>
+
+        {/* Repas plaisir */}
         <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>Hydratation</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>1,5 a 2L / jour · Un grand verre avant chaque repas</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>🎉 Repas plaisir</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            1 à 2 fois par semaine : restau, viennoiserie, glace... Si restau → allège les glucides et lipides autour. Si tu bouges plus → tu peux manger un peu plus.
+          </div>
         </div>
 
       </div>

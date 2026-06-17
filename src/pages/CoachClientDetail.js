@@ -106,6 +106,7 @@ export default function CoachClientDetail() {
     setSaving(true);
     try {
       const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       const newTargets = {
         calories: +targets.calories || 0,
         protein: +targets.protein || 0,
@@ -119,11 +120,21 @@ export default function CoachClientDetail() {
       };
       // Save current targets
       await updateDoc(doc(db, 'clients', clientId), { targets: newTargets });
-      // Save to history with today as validFrom
-      const { setDoc, serverTimestamp } = await import('firebase/firestore');
+      // Fermer la période précédente (validTo = hier)
+      const { setDoc, serverTimestamp, collection: col, query: q, orderBy: ob, getDocs: gd, updateDoc: upd } = await import('firebase/firestore');
+      const histQ = q(col(db, 'clients', clientId, 'targetsHistory'), ob('validFrom', 'desc'));
+      const histSnap = await gd(histQ);
+      if (!histSnap.empty) {
+        const prevDoc = histSnap.docs[0];
+        if (prevDoc.id !== today) {
+          await upd(prevDoc.ref, { validTo: yesterday });
+        }
+      }
+      // Sauvegarder la nouvelle période à partir d'aujourd'hui
       await setDoc(doc(db, 'clients', clientId, 'targetsHistory', today), {
         ...newTargets,
         validFrom: today,
+        validTo: null, // période ouverte
         updatedAt: serverTimestamp(),
       });
       setClient(p => ({ ...p, targets: newTargets }));

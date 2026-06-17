@@ -227,8 +227,8 @@ export default function ClientDashboard() {
           )}
         </div>
 
-        {/* Bloc objectifs hebdo — mode intuitif */}
-        {profile.coachingMode === 'intuitif' && weekGoals?.goals?.some(g => g.active) && (
+        {/* Bloc objectifs hebdo — tous modes */}
+        {weekGoals?.goals?.some(g => g.active) && (
           <>
             <h2 className="section-title">Objectifs de la semaine</h2>
             <div className="card" style={{ marginBottom: 20 }}>

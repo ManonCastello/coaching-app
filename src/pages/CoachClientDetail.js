@@ -938,7 +938,6 @@ export default function CoachClientDetail() {
                       Ces dates définissent sur quels jours ces objectifs s'appliquent dans la balance calorique.
                     </p>
                   </div>
-                  </div>
                   <button className="btn btn-primary" onClick={saveTargets} disabled={saving}>
                     {saving ? 'Enregistrement...' : '✅ Enregistrer'}
                   </button>

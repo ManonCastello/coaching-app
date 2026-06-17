@@ -924,7 +924,7 @@ export default function CoachClientDetail() {
                   </div>
                   <div style={{ background: 'var(--primary-bg)', borderRadius: 10, padding: '14px', border: '1px solid var(--primary-light)' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginBottom: 10 }}>📅 Période de validité</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div className="input-group">
                         <label className="input-label" style={{ fontSize: 11 }}>Date de début</label>
                         <input className="input" type="date" value={targetsValidFrom} onChange={e => setTargetsValidFrom(e.target.value)} />

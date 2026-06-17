@@ -107,17 +107,20 @@ export default function DailyCheckIn({ coachMode }) {
         setGoalChecks({});
       }
 
-      // Balance calorique (mode tracking uniquement) — exclut le jour J
+      // Balance calorique (mode tracking uniquement) — exclut le jour J, filtre par semaine, applique resetOffset
       if (profileData?.coachingMode !== 'intuitif') {
         const today = format(new Date(), 'yyyy-MM-dd');
-        const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
-        const snap = await getDocs(q);
-        const entries = snap.docs.map(d => d.data()).filter(e => e.date !== today);
+        const currentWeekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        const [entriesSnap, resetDoc] = await Promise.all([
+          getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7))),
+          getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', currentWeekKey)),
+        ]);
+        const entries = entriesSnap.docs.map(d => d.data()).filter(e => e.date >= currentWeekKey && e.date !== today);
+        const resetOffset = resetDoc.exists() ? (resetDoc.data().offset || 0) : 0;
         const t = profileData?.targets || {};
         let totalDiff = 0;
         entries.forEach(e => {
           if (e.dailyBalance !== null && e.dailyBalance !== undefined) {
-            // Valeur figée au moment du lock
             totalDiff += e.dailyBalance;
           } else if (e.calories) {
             let target;
@@ -132,7 +135,7 @@ export default function DailyCheckIn({ coachMode }) {
             totalDiff += (e.calories - target);
           }
         });
-        setWeekBalance(Math.round(totalDiff));
+        setWeekBalance(Math.round(totalDiff + resetOffset));
       }
 
       setLoading(false);
@@ -238,20 +241,18 @@ export default function DailyCheckIn({ coachMode }) {
     <div className="app-shell">
       <div className="top-nav">
         <Link to={backUrl} style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
-        <div className="top-nav-title">Suivi quotidien</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setDayOffset(d => d + 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
+          <div style={{ textAlign: 'center' }}>
+            <div className="top-nav-title" style={{ fontSize: 14 }}>{isToday ? "Aujourd'hui" : dateLabel}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{format(subDays(new Date(), dayOffset), 'dd/MM/yyyy')}</div>
+          </div>
+          <button onClick={() => setDayOffset(d => Math.max(0, d - 1))} disabled={isToday} style={{ background: 'none', border: 'none', fontSize: 18, cursor: isToday ? 'default' : 'pointer', color: isToday ? 'var(--border)' : 'var(--text-muted)', padding: '0 4px' }}>→</button>
+        </div>
         <div style={{ width: 24 }} />
       </div>
 
       <div className="page">
-        {/* Date navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-          <button onClick={() => setDayOffset(d => d + 1)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>←</button>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: 15, textTransform: 'capitalize' }}>{isToday ? "Aujourd'hui" : dateLabel}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{format(subDays(new Date(), dayOffset), 'dd/MM/yyyy')}</div>
-          </div>
-          <button onClick={() => setDayOffset(d => Math.max(0, d - 1))} disabled={isToday} style={{ background: 'none', border: 'none', fontSize: 20, cursor: isToday ? 'default' : 'pointer', color: isToday ? 'var(--border)' : 'var(--text-muted)' }}>→</button>
-        </div>
 
         {/* Balance calorique — mode tracking uniquement */}
         {!isIntuitif && weekBalance !== null && (

@@ -143,6 +143,30 @@ export default function CoachClientDetail() {
   }
 
 
+  async function recalculerBalances() {
+    setSaving(true);
+    try {
+      const { getTargetsForDate, clearTargetsCache } = await import('../utils/getTargetsForDate');
+      const { collection, query, orderBy, getDocs, setDoc, serverTimestamp } = await import('firebase/firestore');
+      clearTargetsCache(clientId);
+      const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'asc'));
+      const snap = await getDocs(q);
+      const lockedEntries = snap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() })).filter(e => e.locked && e.calories);
+      for (const e of lockedEntries) {
+        const t = await getTargetsForDate(clientId, e.date, client.targets || {});
+        const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
+        const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
+        const extraCal = e.extraActivityCal || 0;
+        const dailyTarget = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
+        const dailyBalance = e.calories - dailyTarget;
+        await setDoc(e.ref, { dailyTarget, dailyBalance, lockedAt: serverTimestamp() }, { merge: true });
+      }
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+      window.location.reload();
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  }
+
   async function resetWeekBalance() {
     const { format, startOfWeek } = await import('date-fns');
     const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -720,7 +744,9 @@ export default function CoachClientDetail() {
                         if (e.locked) {
                           await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: false }, { merge: true });
                         } else {
-                          const t = client.targets || {};
+                          // Utiliser les targets historiques de la date du jour verrouillé
+                          const { getTargetsForDate } = await import('../utils/getTargetsForDate');
+                          const t = await getTargetsForDate(clientId, e.date, client.targets || {});
                           const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
                           const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
                           const extraCal = e.extraActivityCal || 0;
@@ -728,7 +754,6 @@ export default function CoachClientDetail() {
                           const dailyBalance = e.calories > 0 ? e.calories - dailyTarget : null;
                           await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: true, dailyTarget, dailyBalance, lockedAt: st() }, { merge: true });
                         }
-                        // Recharger les entrées
                         window.location.reload();
                       }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
@@ -943,6 +968,9 @@ export default function CoachClientDetail() {
                   </button>
                   <button className="btn btn-secondary" onClick={resetWeekBalance}>
                     🔄 Remettre la balance semaine à zéro
+                  </button>
+                  <button className="btn btn-secondary" onClick={recalculerBalances} disabled={saving}>
+                    🔁 Recalculer toutes les balances (targets historiques)
                   </button>
                 </div>
               )}

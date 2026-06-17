@@ -17,6 +17,8 @@ export default function CoachClientDetail() {
   const [weeklyEntries, setWeeklyEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editTargets, setEditTargets] = useState(false);
+  const [targetsValidFrom, setTargetsValidFrom] = useState('');
+  const [targetsValidTo, setTargetsValidTo] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [targets, setTargets] = useState({});
@@ -103,10 +105,9 @@ export default function CoachClientDetail() {
   }, [clientId]);
 
   async function saveTargets() {
+    if (!targetsValidFrom) { alert('Merci de saisir une date de début.'); return; }
     setSaving(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       const newTargets = {
         calories: +targets.calories || 0,
         protein: +targets.protein || 0,
@@ -118,23 +119,14 @@ export default function CoachClientDetail() {
         kcalPer1000Steps: +targets.kcalPer1000Steps || 20,
         sessionCalorieDeficit: +targets.sessionCalorieDeficit || 300,
       };
-      // Save current targets
+      // Save current targets on the client doc
       await updateDoc(doc(db, 'clients', clientId), { targets: newTargets });
-      // Fermer la période précédente (validTo = hier)
-      const { setDoc, serverTimestamp, collection: col, query: q, orderBy: ob, getDocs: gd, updateDoc: upd } = await import('firebase/firestore');
-      const histQ = q(col(db, 'clients', clientId, 'targetsHistory'), ob('validFrom', 'desc'));
-      const histSnap = await gd(histQ);
-      if (!histSnap.empty) {
-        const prevDoc = histSnap.docs[0];
-        if (prevDoc.id !== today) {
-          await upd(prevDoc.ref, { validTo: yesterday });
-        }
-      }
-      // Sauvegarder la nouvelle période à partir d'aujourd'hui
-      await setDoc(doc(db, 'clients', clientId, 'targetsHistory', today), {
+      // Save period to targetsHistory keyed by validFrom date
+      const { setDoc, serverTimestamp } = await import('firebase/firestore');
+      await setDoc(doc(db, 'clients', clientId, 'targetsHistory', targetsValidFrom), {
         ...newTargets,
-        validFrom: today,
-        validTo: null, // période ouverte
+        validFrom: targetsValidFrom,
+        validTo: targetsValidTo || null,
         updatedAt: serverTimestamp(),
       });
       setClient(p => ({ ...p, targets: newTargets }));
@@ -881,7 +873,13 @@ export default function CoachClientDetail() {
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editTargets ? 20 : 12 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>🔢 Objectifs calories & macros</div>
-                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditTargets(!editTargets)}>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => {
+                  setEditTargets(!editTargets);
+                  if (!editTargets) {
+                    setTargetsValidFrom(new Date().toISOString().split('T')[0]);
+                    setTargetsValidTo('');
+                  }
+                }}>
                   {editTargets ? 'Annuler' : 'Modifier'}
                 </button>
               </div>
@@ -923,6 +921,23 @@ export default function CoachClientDetail() {
                         <input className="input" type="number" value={targets[f.key] || ''} onChange={e => setT(f.key, e.target.value)} />
                       </div>
                     ))}
+                  </div>
+                  <div style={{ background: 'var(--primary-bg)', borderRadius: 10, padding: '14px', border: '1px solid var(--primary-light)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginBottom: 10 }}>📅 Période de validité</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div className="input-group">
+                        <label className="input-label" style={{ fontSize: 11 }}>Date de début</label>
+                        <input className="input" type="date" value={targetsValidFrom} onChange={e => setTargetsValidFrom(e.target.value)} />
+                      </div>
+                      <div className="input-group">
+                        <label className="input-label" style={{ fontSize: 11 }}>Date de fin (vide = ouvert)</label>
+                        <input className="input" type="date" value={targetsValidTo} onChange={e => setTargetsValidTo(e.target.value)} />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                      Ces dates définissent sur quels jours ces objectifs s'appliquent dans la balance calorique.
+                    </p>
+                  </div>
                   </div>
                   <button className="btn btn-primary" onClick={saveTargets} disabled={saving}>
                     {saving ? 'Enregistrement...' : '✅ Enregistrer'}

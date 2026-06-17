@@ -115,13 +115,14 @@ export default function DailyCheckIn({ coachMode }) {
         const t = profileData?.targets || {};
         let totalDiff = 0;
         entries.forEach(e => {
-          if (e.calories) {
+          if (e.dailyBalance !== null && e.dailyBalance !== undefined) {
+            // Valeur figée au moment du lock
+            totalDiff += e.dailyBalance;
+          } else if (e.calories) {
             let target;
             if (e.locked && e.dailyTarget != null) {
-              // Journée verrouillée : utiliser le target sauvegardé au moment du lock
               target = e.dailyTarget;
             } else {
-              // Journée non verrouillée : calculer avec les targets actuels
               const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
               const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
               const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;

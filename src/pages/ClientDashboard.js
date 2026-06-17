@@ -131,7 +131,7 @@ export default function ClientDashboard() {
   const extraCal = todayEntry?.extraActivityCal || 0;
   const baseCalories = targets?.calories || 2000;
   const adjustedCalories = baseCalories + (todayEntry ? stepBonus + sessionAdj + extraCal : 0);
-  const caloriePct = Math.min(100, Math.round((todayCalories / adjustedCalories) * 100));
+  const caloriePct = Math.min(100, Math.round((todayCalories / baseCalories) * 100));
   const stepPct = Math.min(100, Math.round((todaySteps / (targets?.steps || 10000)) * 100));
 
   const balanceColor = weekBalance === null ? 'var(--text-muted)'
@@ -200,7 +200,7 @@ export default function ClientDashboard() {
           {(profile.coachingMode || 'tracking') !== 'intuitif' && (
             <div className="stat-card">
               <div className="stat-label">Calories</div>
-              <div className="stat-value">{todayCalories.toLocaleString()}<span className="stat-unit">/ {adjustedCalories.toLocaleString()}</span></div>
+              <div className="stat-value">{todayCalories.toLocaleString()}<span className="stat-unit">/ {baseCalories.toLocaleString()}</span></div>
               <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${caloriePct}%` }} /></div>
             </div>
           )}

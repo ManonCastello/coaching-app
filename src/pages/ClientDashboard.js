@@ -234,48 +234,61 @@ export default function ClientDashboard() {
 
         {/* ── REPÈRE DE L'ASSIETTE ── */}
         {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (
-          <div className="card" style={{ marginBottom: 20 }}>
-            <svg width="100%" viewBox="0 0 680 400" role="img" aria-label="Assiette type et répartition">
-              <text x="150" y="22" textAnchor="middle" fontSize="11" fontWeight="700" fill="#9ca3af" letterSpacing="0.08em">L'ASSIETTE TYPE</text>
-              <circle cx="150" cy="182" r="138" fill="#fafaf8" stroke="#ccc9c0" strokeWidth="6"/>
-              <circle cx="150" cy="182" r="130" fill="#fafaf8" stroke="#e8e3dc" strokeWidth="1"/>
-              <path d="M150,182 L150,52 A130,130 0 0,1 150,312 Z" fill="#82C97E"/>
-              <path d="M150,182 L150,312 A130,130 0 0,1 20,182 Z" fill="#E8C56A"/>
-              <path d="M150,182 L20,182 A130,130 0 0,1 150,52 Z" fill="#E8906A"/>
-              <circle cx="150" cy="182" r="28" fill="#9B8FD4" stroke="#fafaf8" strokeWidth="3"/>
-              <text x="150" y="190" textAnchor="middle" dominantBaseline="middle" fontSize="20">🥑</text>
-              <text x="215" y="190" textAnchor="middle" dominantBaseline="middle" fontSize="24">🥦</text>
-              <text x="84" y="270" textAnchor="middle" dominantBaseline="middle" fontSize="24">🌾</text>
-              <text x="84" y="103" textAnchor="middle" dominantBaseline="middle" fontSize="24">🥩</text>
-              <text x="150" y="342" textAnchor="middle" fontSize="11" fontWeight="700" fill="#9ca3af" letterSpacing="0.08em">LÉGENDE</text>
-              <rect x="20" y="354" width="12" height="12" rx="3" fill="#E8906A"/>
-              <text x="38" y="365" fontSize="12" fill="#4b5563">🥩 Protéines — ¼ de l'assiette</text>
-              <rect x="20" y="374" width="12" height="12" rx="3" fill="#82C97E"/>
-              <text x="38" y="385" fontSize="12" fill="#4b5563">🥦 Légumes — ½ de l'assiette</text>
-              <rect x="160" y="354" width="12" height="12" rx="3" fill="#E8C56A"/>
-              <text x="178" y="365" fontSize="12" fill="#4b5563">🌾 Glucides — ¼ de l'assiette</text>
-              <rect x="160" y="374" width="12" height="12" rx="3" fill="#9B8FD4"/>
-              <text x="178" y="385" fontSize="12" fill="#4b5563">🥑 Lipides — petite quantité</text>
-              <line x1="320" y1="16" x2="320" y2="320" stroke="#e5e7eb" strokeWidth="0.8"/>
-              <text x="344" y="22" fontSize="11" fontWeight="700" fill="#9ca3af" letterSpacing="0.08em">RÉPARTITION CONSEILLÉE POUR TOI</text>
-              <rect x="344" y="36" width="320" height="58" rx="10" fill="#f9fafb" stroke="#e5e7eb" strokeWidth="1"/>
-              <text x="362" y="58" fontSize="14" fontWeight="700" fill="#1f2937">🌅 Matin</text>
-              <text x="652" y="58" textAnchor="end" fontSize="14" fontWeight="700" fill="#1f2937">~{Math.round(targets.calories * 0.25)} kcal</text>
-              {targets.protein > 0 && <text x="652" y="78" textAnchor="end" fontSize="12" fontWeight="700" fill="#E8906A">{Math.round(targets.protein * 0.25)}g protéines</text>}
-              <rect x="344" y="104" width="320" height="58" rx="10" fill="#f9fafb" stroke="#e5e7eb" strokeWidth="1"/>
-              <text x="362" y="126" fontSize="14" fontWeight="700" fill="#1f2937">☀️ Midi</text>
-              <text x="652" y="126" textAnchor="end" fontSize="14" fontWeight="700" fill="#1f2937">~{Math.round(targets.calories * 0.35)} kcal</text>
-              {targets.protein > 0 && <text x="652" y="146" textAnchor="end" fontSize="12" fontWeight="700" fill="#E8906A">{Math.round(targets.protein * 0.35)}g protéines</text>}
-              <rect x="344" y="172" width="320" height="58" rx="10" fill="#f9fafb" stroke="#e5e7eb" strokeWidth="1"/>
-              <text x="362" y="194" fontSize="14" fontWeight="700" fill="#1f2937">🌙 Soir</text>
-              <text x="652" y="194" textAnchor="end" fontSize="14" fontWeight="700" fill="#1f2937">~{Math.round(targets.calories * 0.30)} kcal</text>
-              {targets.protein > 0 && <text x="652" y="214" textAnchor="end" fontSize="12" fontWeight="700" fill="#E8906A">{Math.round(targets.protein * 0.30)}g protéines</text>}
-              <rect x="344" y="240" width="320" height="58" rx="10" fill="#f9fafb" stroke="#e5e7eb" strokeWidth="1"/>
-              <text x="362" y="262" fontSize="14" fontWeight="700" fill="#1f2937">🍎 Collation</text>
-              <text x="652" y="262" textAnchor="end" fontSize="14" fontWeight="700" fill="#1f2937">~{Math.round(targets.calories * 0.10)} kcal</text>
-              {targets.protein > 0 && <text x="652" y="282" textAnchor="end" fontSize="12" fontWeight="700" fill="#E8906A">{Math.round(targets.protein * 0.10)}g protéines</text>}
-            </svg>
-          </div>
+          <>
+            {/* Carte 1 : assiette type + légende */}
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                <svg width="160" height="160" viewBox="0 0 160 160" style={{ flexShrink: 0 }}>
+                  <circle cx="80" cy="80" r="78" fill="#fafaf8" stroke="#ccc9c0" strokeWidth="5"/>
+                  <circle cx="80" cy="80" r="72" fill="#fafaf8" stroke="#e8e3dc" strokeWidth="1"/>
+                  <path d="M80,80 L80,8 A72,72 0 0,1 80,152 Z" fill="#82C97E"/>
+                  <path d="M80,80 L80,152 A72,72 0 0,1 8,80 Z" fill="#E8C56A"/>
+                  <path d="M80,80 L8,80 A72,72 0 0,1 80,8 Z" fill="#E8906A"/>
+                  <circle cx="80" cy="80" r="20" fill="#9B8FD4" stroke="#fafaf8" strokeWidth="2"/>
+                  <text x="80" y="86" textAnchor="middle" dominantBaseline="middle" fontSize="16">🥑</text>
+                  <text x="118" y="80" textAnchor="middle" dominantBaseline="middle" fontSize="20">🥦</text>
+                  <text x="44" y="120" textAnchor="middle" dominantBaseline="middle" fontSize="20">🌾</text>
+                  <text x="44" y="42" textAnchor="middle" dominantBaseline="middle" fontSize="20">🥩</text>
+                </svg>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>LÉGENDE</div>
+                  {[
+                    { color: '#E8906A', label: '🥩 Protéines', part: '¼ de l'assiette' },
+                    { color: '#82C97E', label: '🥦 Légumes', part: '½ de l'assiette' },
+                    { color: '#E8C56A', label: '🌾 Glucides', part: '¼ de l'assiette' },
+                    { color: '#9B8FD4', label: '🥑 Lipides', part: 'petite quantité' },
+                  ].map(item => (
+                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 3, background: item.color, flexShrink: 0 }}/>
+                      <span style={{ fontSize: 13, flex: 1 }}>{item.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{item.part}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Carte 2 : répartition par repas */}
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>RÉPARTITION CONSEILLÉE POUR TOI</div>
+              {[
+                { label: '🌅 Matin', r: 0.25 },
+                { label: '☀️ Midi', r: 0.35 },
+                { label: '🌙 Soir', r: 0.30 },
+                { label: '🍎 Collation', r: 0.10 },
+              ].map(m => (
+                <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginBottom: 6, border: '1px solid var(--border-light)', borderRadius: 10, background: 'var(--bg)' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{m.label}</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700 }}>~{Math.round(targets.calories * m.r)} kcal</span>
+                    {targets.protein > 0 && (
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#E8906A' }}>{Math.round(targets.protein * m.r)}g protéines</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* ── OBJECTIFS DE LA SEMAINE ── */}

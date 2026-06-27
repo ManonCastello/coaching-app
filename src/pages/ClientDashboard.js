@@ -238,34 +238,43 @@ export default function ClientDashboard() {
             {/* Carte 1 : assiette type + légende */}
             <div className="card" style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>L'ASSIETTE TYPE</div>
-              <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                <svg width="160" height="160" viewBox="0 0 160 160" style={{ flexShrink: 0 }}>
-                  <circle cx="80" cy="80" r="78" fill="#fafaf8" stroke="#ccc9c0" strokeWidth="5"/>
-                  <circle cx="80" cy="80" r="72" fill="#fafaf8" stroke="#e8e3dc" strokeWidth="1"/>
-                  <path d="M80,80 L80,8 A72,72 0 0,1 80,152 Z" fill="#82C97E"/>
-                  <path d="M80,80 L80,152 A72,72 0 0,1 8,80 Z" fill="#E8C56A"/>
-                  <path d="M80,80 L8,80 A72,72 0 0,1 80,8 Z" fill="#E8906A"/>
-                  <circle cx="80" cy="80" r="20" fill="#9B8FD4" stroke="#fafaf8" strokeWidth="2"/>
-                  <text x="80" y="86" textAnchor="middle" dominantBaseline="middle" fontSize="16">🥑</text>
-                  <text x="118" y="80" textAnchor="middle" dominantBaseline="middle" fontSize="20">🥦</text>
-                  <text x="44" y="120" textAnchor="middle" dominantBaseline="middle" fontSize="20">🌾</text>
-                  <text x="44" y="42" textAnchor="middle" dominantBaseline="middle" fontSize="20">🥩</text>
+              {/* Camembert centré */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                <svg width="180" height="180" viewBox="0 0 180 180">
+                  <circle cx="90" cy="90" r="88" fill="#fafaf8" stroke="#ccc9c0" strokeWidth="5"/>
+                  <circle cx="90" cy="90" r="80" fill="#fafaf8" stroke="#e8e3dc" strokeWidth="1"/>
+                  <path d="M90,90 L90,10 A80,80 0 0,1 90,170 Z" fill="#82C97E"/>
+                  <path d="M90,90 L90,170 A80,80 0 0,1 10,90 Z" fill="#E8C56A"/>
+                  <path d="M90,90 L10,90 A80,80 0 0,1 90,10 Z" fill="#E8906A"/>
+                  <circle cx="90" cy="90" r="22" fill="#9B8FD4" stroke="#fafaf8" strokeWidth="2"/>
+                  {/* Emojis positionnés au centroïde de chaque part */}
+                  {/* Lipides au centre */}
+                  <text x="90" y="90" textAnchor="middle" dominantBaseline="central" fontSize="18">🥑</text>
+                  {/* Légumes : milieu droite → x=133, y=90 */}
+                  <text x="133" y="90" textAnchor="middle" dominantBaseline="central" fontSize="22">🥦</text>
+                  {/* Glucides : bas-gauche → x=57, y=133 */}
+                  <text x="57" y="133" textAnchor="middle" dominantBaseline="central" fontSize="22">🌾</text>
+                  {/* Protéines : haut-gauche → x=57, y=47 */}
+                  <text x="57" y="47" textAnchor="middle" dominantBaseline="central" fontSize="22">🥩</text>
                 </svg>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 10 }}>LÉGENDE</div>
-                  {[
-                    { color: '#E8906A', emoji: '🥩', label: 'Protéines', part: "¼ de l'assiette" },
-                    { color: '#82C97E', emoji: '🥦', label: 'Légumes', part: "½ de l'assiette" },
-                    { color: '#E8C56A', emoji: '🌾', label: 'Glucides', part: "¼ de l'assiette" },
-                    { color: '#9B8FD4', emoji: '🥑', label: 'Lipides', part: 'petite quantité' },
-                  ].map(item => (
-                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 6, background: item.color, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{item.emoji}</div>
-                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{item.label}</span>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.part}</span>
+              </div>
+              {/* Légende 2 colonnes */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 8 }}>LÉGENDE</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { color: '#E8906A', emoji: '🥩', label: 'Protéines', part: "¼ de l'assiette" },
+                  { color: '#82C97E', emoji: '🥦', label: 'Légumes', part: "½ de l'assiette" },
+                  { color: '#E8C56A', emoji: '🌾', label: 'Glucides', part: "¼ de l'assiette" },
+                  { color: '#9B8FD4', emoji: '🥑', label: 'Lipides', part: 'petite quantité' },
+                ].map(item => (
+                  <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 6, background: item.color, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{item.emoji}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.part}</div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             </div>
 

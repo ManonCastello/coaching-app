@@ -253,9 +253,9 @@ export default function ClientDashboard() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>LÉGENDE</div>
                   {[
-                    { color: '#E8906A', label: '🥩 Protéines', part: '¼ de l'assiette' },
-                    { color: '#82C97E', label: '🥦 Légumes', part: '½ de l'assiette' },
-                    { color: '#E8C56A', label: '🌾 Glucides', part: '¼ de l'assiette' },
+                    { color: '#E8906A', label: '🥩 Protéines', part: "¼ de l'assiette" },
+                    { color: '#82C97E', label: '🥦 Légumes', part: "½ de l'assiette" },
+                    { color: '#E8C56A', label: '🌾 Glucides', part: "¼ de l'assiette" },
                     { color: '#9B8FD4', label: '🥑 Lipides', part: 'petite quantité' },
                   ].map(item => (
                     <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

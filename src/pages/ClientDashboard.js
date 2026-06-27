@@ -237,6 +237,7 @@ export default function ClientDashboard() {
           <>
             {/* Carte 1 : assiette type + légende */}
             <div className="card" style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>L'ASSIETTE TYPE</div>
               <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
                 <svg width="160" height="160" viewBox="0 0 160 160" style={{ flexShrink: 0 }}>
                   <circle cx="80" cy="80" r="78" fill="#fafaf8" stroke="#ccc9c0" strokeWidth="5"/>
@@ -251,17 +252,17 @@ export default function ClientDashboard() {
                   <text x="44" y="42" textAnchor="middle" dominantBaseline="middle" fontSize="20">🥩</text>
                 </svg>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>LÉGENDE</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 10 }}>LÉGENDE</div>
                   {[
-                    { color: '#E8906A', label: '🥩 Protéines', part: "¼ de l'assiette" },
-                    { color: '#82C97E', label: '🥦 Légumes', part: "½ de l'assiette" },
-                    { color: '#E8C56A', label: '🌾 Glucides', part: "¼ de l'assiette" },
-                    { color: '#9B8FD4', label: '🥑 Lipides', part: 'petite quantité' },
+                    { color: '#E8906A', emoji: '🥩', label: 'Protéines', part: "¼ de l'assiette" },
+                    { color: '#82C97E', emoji: '🥦', label: 'Légumes', part: "½ de l'assiette" },
+                    { color: '#E8C56A', emoji: '🌾', label: 'Glucides', part: "¼ de l'assiette" },
+                    { color: '#9B8FD4', emoji: '🥑', label: 'Lipides', part: 'petite quantité' },
                   ].map(item => (
-                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: 3, background: item.color, flexShrink: 0 }}/>
-                      <span style={{ fontSize: 13, flex: 1 }}>{item.label}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{item.part}</span>
+                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: item.color, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{item.emoji}</div>
+                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{item.label}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.part}</span>
                     </div>
                   ))}
                 </div>

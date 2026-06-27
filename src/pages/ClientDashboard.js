@@ -233,80 +233,43 @@ export default function ClientDashboard() {
         </div>
 
         {/* ── REPÈRE DE L'ASSIETTE ── */}
-        {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (() => {
-          const protCal = (targets.protein || 0) * 4;
-          const carbsCal = (targets.carbs || 0) * 4;
-          const fatCal = (targets.fat || 0) * 9;
-          const total = protCal + carbsCal + fatCal || targets.calories;
-          const protPct = total ? protCal / total : 0.3;
-          const carbsPct = total ? carbsCal / total : 0.4;
-          const fatPct = total ? fatCal / total : 0.3;
-          const polarToCartesian = (cx, cy, r, angleDeg) => {
-            const a = (angleDeg - 90) * Math.PI / 180;
-            return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-          };
-          const makeSlice = (cx, cy, r, startDeg, endDeg, color, pct) => {
-            if (pct < 0.005) return null;
-            const start = polarToCartesian(cx, cy, r, startDeg);
-            const end = polarToCartesian(cx, cy, r, endDeg);
-            const large = endDeg - startDeg > 180 ? 1 : 0;
-            const mid = polarToCartesian(cx, cy, r * 0.65, startDeg + (endDeg - startDeg) / 2);
-            return (
-              <g key={color}>
-                <path d={`M${cx},${cy} L${start.x},${start.y} A${r},${r} 0 ${large},1 ${end.x},${end.y} Z`} fill={color} />
-                {pct > 0.08 && <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="11" fontWeight="700">{Math.round(pct * 100)}%</text>}
-              </g>
-            );
-          };
-          const cx = 80, cy = 80, r = 72;
-          let angle = 0;
-          const meals = [
-            { label: '🌅 Matin', r: 0.25 },
-            { label: '☀️ Midi', r: 0.35 },
-            { label: '🌙 Soir', r: 0.30 },
-            { label: '🍎 Collation', r: 0.10 },
-          ];
-          return (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>🍽️ Repère de l'assiette</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <svg width="160" height="160" viewBox="0 0 160 160" style={{ flexShrink: 0 }}>
-                  <circle cx={cx} cy={cy} r={r + 4} fill="rgba(0,0,0,0.05)" />
-                  {[
-                    { pct: protPct, color: '#F59E0B' },
-                    { pct: carbsPct, color: '#EC4899' },
-                    { pct: fatPct, color: '#7C3AED' },
-                  ].map(s => {
-                    const el = makeSlice(cx, cy, r, angle, angle + s.pct * 360, s.color, s.pct);
-                    angle += s.pct * 360;
-                    return el;
-                  })}
-                  <circle cx={cx} cy={cy} r={26} fill="white" />
-                  <text x={cx} y={cy - 5} textAnchor="middle" dominantBaseline="middle" fill="var(--primary)" fontSize="12" fontWeight="800">{targets.calories}</text>
-                  <text x={cx} y={cy + 9} textAnchor="middle" dominantBaseline="middle" fill="var(--text-muted)" fontSize="8">kcal</text>
-                </svg>
-                <div style={{ flex: 1 }}>
-                  {/* Repères par repas : kcal + protéines */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                    {meals.map(m => (
-                      <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{m.label}</span>
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700 }}>~{Math.round(targets.calories * m.r)} kcal</span>
-                          {targets.protein > 0 && (
-                            <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 700, marginLeft: 6 }}>
-                              {Math.round(targets.protein * m.r)}g P
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <svg width="100%" viewBox="0 0 680 300" role="img" aria-label="Assiette type et conseil répartition">
+              <circle cx="185" cy="150" r="145" fill="var(--bg)" stroke="var(--border)" strokeWidth="1"/>
+              <path d="M185,150 L185,5 A145,145 0 0,1 185,295 Z" fill="#5BAD6F"/>
+              <path d="M185,150 L185,295 A145,145 0 0,1 40,150 Z" fill="#EC4899"/>
+              <path d="M185,150 L40,150 A145,145 0 0,1 185,5 Z" fill="#F59E0B"/>
+              <circle cx="185" cy="150" r="46" fill="#7C3AED"/>
+              <text x="185" y="146" textAnchor="middle" fontSize="12" fill="white">🥑 Lipides</text>
+              <text x="185" y="162" textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.85)">petit peu</text>
+              <text x="256" y="143" textAnchor="middle" fontSize="13" fontWeight="700" fill="white">🥦 Légumes</text>
+              <text x="256" y="160" textAnchor="middle" fontSize="12" fill="rgba(255,255,255,0.9)">½ de l'assiette</text>
+              <text x="94" y="234" textAnchor="middle" fontSize="13" fontWeight="700" fill="white">🌾 Glucides</text>
+              <text x="94" y="250" textAnchor="middle" fontSize="12" fill="rgba(255,255,255,0.9)">¼</text>
+              <text x="94" y="66" textAnchor="middle" fontSize="13" fontWeight="700" fill="white">🥩 Protéines</text>
+              <text x="94" y="82" textAnchor="middle" fontSize="12" fill="rgba(255,255,255,0.9)">¼</text>
+              <line x1="358" y1="10" x2="358" y2="290" stroke="var(--border)" strokeWidth="0.5"/>
+              <text x="388" y="28" fontSize="13" fontWeight="700" fill="var(--text)">Assiette type · répartition conseillée</text>
+              <rect x="388" y="42" width="272" height="44" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="0.5"/>
+              <text x="402" y="60" fontSize="13" fontWeight="700" fill="var(--text)">🌅 Matin</text>
+              <text x="648" y="60" textAnchor="end" fontSize="13" fill="var(--text)">~{Math.round(targets.calories * 0.25)} kcal</text>
+              {targets.protein > 0 && <text x="648" y="77" textAnchor="end" fontSize="11" fontWeight="700" fill="#F59E0B">{Math.round(targets.protein * 0.25)}g P</text>}
+              <rect x="388" y="96" width="272" height="44" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="0.5"/>
+              <text x="402" y="114" fontSize="13" fontWeight="700" fill="var(--text)">☀️ Midi</text>
+              <text x="648" y="114" textAnchor="end" fontSize="13" fill="var(--text)">~{Math.round(targets.calories * 0.35)} kcal</text>
+              {targets.protein > 0 && <text x="648" y="131" textAnchor="end" fontSize="11" fontWeight="700" fill="#F59E0B">{Math.round(targets.protein * 0.35)}g P</text>}
+              <rect x="388" y="150" width="272" height="44" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="0.5"/>
+              <text x="402" y="168" fontSize="13" fontWeight="700" fill="var(--text)">🌙 Soir</text>
+              <text x="648" y="168" textAnchor="end" fontSize="13" fill="var(--text)">~{Math.round(targets.calories * 0.30)} kcal</text>
+              {targets.protein > 0 && <text x="648" y="185" textAnchor="end" fontSize="11" fontWeight="700" fill="#F59E0B">{Math.round(targets.protein * 0.30)}g P</text>}
+              <rect x="388" y="204" width="272" height="44" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="0.5"/>
+              <text x="402" y="222" fontSize="13" fontWeight="700" fill="var(--text)">🍎 Collation</text>
+              <text x="648" y="222" textAnchor="end" fontSize="13" fill="var(--text)">~{Math.round(targets.calories * 0.10)} kcal</text>
+              {targets.protein > 0 && <text x="648" y="239" textAnchor="end" fontSize="11" fontWeight="700" fill="#F59E0B">{Math.round(targets.protein * 0.10)}g P</text>}
+            </svg>
+          </div>
+        )}
 
         {/* ── OBJECTIFS DE LA SEMAINE ── */}
         {weekGoals?.goals?.some(g => g.active) && (

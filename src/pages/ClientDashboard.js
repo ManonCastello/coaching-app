@@ -212,6 +212,26 @@ export default function ClientDashboard() {
           )}
         </div>
 
+        {/* ── MES OBJECTIFS ── */}
+        <h2 className="section-title">Mes objectifs</h2>
+        <div className="card" style={{ marginBottom: 20 }}>
+          {[
+            ...(profile.coachingMode !== 'intuitif' ? [
+              { icon: '🔥', label: 'Calories cibles', value: `${targets?.calories || '—'} kcal`, color: 'var(--primary)' },
+              { icon: '🥩', label: 'Protéines', value: `${targets?.protein || '—'} g`, color: '#F59E0B' },
+              { icon: '🌾', label: 'Glucides', value: `${targets?.carbs || '—'} g`, color: '#EC4899' },
+              { icon: '🥑', label: 'Lipides', value: `${targets?.fat || '—'} g`, color: '#7C3AED' },
+            ] : []),
+            { icon: '👟', label: 'Pas / jour', value: (targets?.steps || 10000).toLocaleString(), color: 'var(--success)' },
+            { icon: '🏋️', label: 'Séances / semaine', value: targets?.sessionsPerWeek || 3, color: 'var(--primary)' },
+          ].map(t => (
+            <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t.icon} {t.label}</span>
+              <span style={{ fontWeight: 700, color: t.color }}>{t.value}</span>
+            </div>
+          ))}
+        </div>
+
         {/* ── REPÈRE DE L'ASSIETTE ── */}
         {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (() => {
           const protCal = (targets.protein || 0) * 4;
@@ -275,7 +295,7 @@ export default function ClientDashboard() {
                           <span style={{ fontSize: 13, fontWeight: 700 }}>~{Math.round(targets.calories * m.r)} kcal</span>
                           {targets.protein > 0 && (
                             <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 700, marginLeft: 6 }}>
-                              {Math.round(targets.protein * m.r)}g prot
+                              {Math.round(targets.protein * m.r)}g P
                             </span>
                           )}
                         </div>
@@ -288,6 +308,49 @@ export default function ClientDashboard() {
           );
         })()}
 
+        {/* ── OBJECTIFS DE LA SEMAINE ── */}
+        {weekGoals?.goals?.some(g => g.active) && (
+          <>
+            <h2 className="section-title">Objectifs de la semaine</h2>
+            <div className="card" style={{ marginBottom: 20 }}>
+              {weekGoals.goals.filter(g => g.active).map((goal, i, arr) => {
+                let checks = [];
+                let label = '';
+                if (goal.key === 'protein') {
+                  const meals = ['morning', 'lunch', 'dinner'];
+                  if (goal.includeSnack) meals.push('snack');
+                  const done = meals.filter(m => todayGoalChecks?.protein?.[m]).length;
+                  checks = [{ label: `${done}/${meals.length} repas`, done: done === meals.length }];
+                  label = '🥩 Protéines ≥ 30g';
+                } else if (goal.key === 'vegetables') {
+                  const done = ['lunch','dinner'].filter(m => todayGoalChecks?.vegetables?.[m]).length;
+                  checks = [{ label: `${done}/2 repas`, done: done === 2 }];
+                  label = '🥦 Légumes ≥ 250g';
+                } else if (goal.key === 'fruits') {
+                  const done = !!todayGoalChecks?.fruits?.done;
+                  checks = [{ label: done ? 'Atteint ✅' : 'Pas encore', done }];
+                  label = '🍎 2 fruits min.';
+                } else if (goal.key === 'junkfood') {
+                  const cal = todayGoalChecks?.junkfood?.calories;
+                  const ok = cal ? +cal <= (goal.maxCalories || 300) : null;
+                  checks = [{ label: cal ? `${cal} kcal${ok ? ' ✅' : ' ⚠️'}` : 'Non renseigné', done: ok }];
+                  label = `🍕 Malbouffe (max ${goal.maxCalories || 300} kcal)`;
+                }
+                return (
+                  <div key={goal.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: checks[0]?.done ? 'var(--success)' : 'var(--text-muted)' }}>{checks[0]?.label}</span>
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 12, textAlign: 'center' }}>
+                <a href="/checkin/daily" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                  ✏️ Compléter mon suivi du jour →
+                </a>
+              </div>
+            </div>
+          </>
+        )}
         {/* Bloc Mes progrès */}
         {(profile.startWeight || profile.startMeasurements) && (
           <>
@@ -363,69 +426,6 @@ export default function ClientDashboard() {
         )}
 
         {/* Targets */}
-        {/* ── MES OBJECTIFS ── */}
-        <h2 className="section-title">Mes objectifs</h2>
-        <div className="card" style={{ marginBottom: 20 }}>
-          {[
-            ...(profile.coachingMode !== 'intuitif' ? [
-              { icon: '🔥', label: 'Calories cibles', value: `${targets?.calories || '—'} kcal`, color: 'var(--primary)' },
-              { icon: '🥩', label: 'Protéines', value: `${targets?.protein || '—'} g`, color: '#F59E0B' },
-              { icon: '🌾', label: 'Glucides', value: `${targets?.carbs || '—'} g`, color: '#EC4899' },
-              { icon: '🥑', label: 'Lipides', value: `${targets?.fat || '—'} g`, color: '#7C3AED' },
-            ] : []),
-            { icon: '👟', label: 'Pas / jour', value: (targets?.steps || 10000).toLocaleString(), color: 'var(--success)' },
-            { icon: '🏋️', label: 'Séances / semaine', value: targets?.sessionsPerWeek || 3, color: 'var(--primary)' },
-          ].map(t => (
-            <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
-              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t.icon} {t.label}</span>
-              <span style={{ fontWeight: 700, color: t.color }}>{t.value}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* ── OBJECTIFS DE LA SEMAINE ── */}
-        {weekGoals?.goals?.some(g => g.active) && (
-          <>
-            <h2 className="section-title">Objectifs de la semaine</h2>
-            <div className="card" style={{ marginBottom: 20 }}>
-              {weekGoals.goals.filter(g => g.active).map((goal, i, arr) => {
-                let checks = [];
-                let label = '';
-                if (goal.key === 'protein') {
-                  const meals = ['morning', 'lunch', 'dinner'];
-                  if (goal.includeSnack) meals.push('snack');
-                  const done = meals.filter(m => todayGoalChecks?.protein?.[m]).length;
-                  checks = [{ label: `${done}/${meals.length} repas`, done: done === meals.length }];
-                  label = '🥩 Protéines ≥ 30g';
-                } else if (goal.key === 'vegetables') {
-                  const done = ['lunch','dinner'].filter(m => todayGoalChecks?.vegetables?.[m]).length;
-                  checks = [{ label: `${done}/2 repas`, done: done === 2 }];
-                  label = '🥦 Légumes ≥ 250g';
-                } else if (goal.key === 'fruits') {
-                  const done = !!todayGoalChecks?.fruits?.done;
-                  checks = [{ label: done ? 'Atteint ✅' : 'Pas encore', done }];
-                  label = '🍎 2 fruits min.';
-                } else if (goal.key === 'junkfood') {
-                  const cal = todayGoalChecks?.junkfood?.calories;
-                  const ok = cal ? +cal <= (goal.maxCalories || 300) : null;
-                  checks = [{ label: cal ? `${cal} kcal${ok ? ' ✅' : ' ⚠️'}` : 'Non renseigné', done: ok }];
-                  label = `🍕 Malbouffe (max ${goal.maxCalories || 300} kcal)`;
-                }
-                return (
-                  <div key={goal.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: checks[0]?.done ? 'var(--success)' : 'var(--text-muted)' }}>{checks[0]?.label}</span>
-                  </div>
-                );
-              })}
-              <div style={{ marginTop: 12, textAlign: 'center' }}>
-                <a href="/checkin/daily" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
-                  ✏️ Compléter mon suivi du jour →
-                </a>
-              </div>
-            </div>
-          </>
-        )}
         {allEntries.length > 0 && (
           <>
             <h2 className="section-title">Mon journal</h2>

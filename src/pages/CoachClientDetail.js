@@ -834,7 +834,7 @@ export default function CoachClientDetail() {
               <div className="card" style={{ background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>📐 Mensurations de départ</div>
-                  <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setActiveTab('vue'); setEditStartData(true); }}>
+                  <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setActiveTab('overview'); setEditStartData(true); }}>
                     ✏️ Modifier
                   </button>
                 </div>

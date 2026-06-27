@@ -141,7 +141,8 @@ export default function MealPlan() {
   function changeQty(id, delta) {
     setPortions(function(p) {
       var current = p[id] || 0;
-      var next = Math.round((current + delta) * 10) / 10;
+      // Premier ajout : toujours partir à 1
+      var next = current === 0 && delta > 0 ? 1 : Math.round((current + delta) * 10) / 10;
       if (next <= 0) { var copy = Object.assign({}, p); delete copy[id]; return copy; }
       return Object.assign({}, p, { [id]: next });
     });

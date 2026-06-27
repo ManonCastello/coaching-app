@@ -778,6 +778,48 @@ export default function CoachClientDetail() {
                     </span>
                   )}
                 </div>
+                {/* Macros */}
+                {(e.protein > 0 || e.carbs > 0 || e.fat > 0) && (
+                  <div style={{ display: 'flex', gap: 10, marginTop: 5, flexWrap: 'wrap' }}>
+                    {e.protein > 0 && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#FEF3C7', color: '#92400E', fontWeight: 600 }}>
+                        🥩 {e.protein}g prot
+                        {client.targets?.protein > 0 && (
+                          <span style={{ opacity: 0.7, fontWeight: 400 }}> / {client.targets.protein}g</span>
+                        )}
+                      </span>
+                    )}
+                    {e.carbs > 0 && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#EFF6FF', color: '#1D4ED8', fontWeight: 600 }}>
+                        🌾 {e.carbs}g gluc
+                        {client.targets?.carbs > 0 && (
+                          <span style={{ opacity: 0.7, fontWeight: 400 }}> / {client.targets.carbs}g</span>
+                        )}
+                      </span>
+                    )}
+                    {e.fat > 0 && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#F0FDF4', color: '#15803D', fontWeight: 600 }}>
+                        🥑 {e.fat}g lip
+                        {client.targets?.fat > 0 && (
+                          <span style={{ opacity: 0.7, fontWeight: 400 }}> / {client.targets.fat}g</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {/* Objectifs cochés */}
+                {e.goalChecks && Object.keys(e.goalChecks).length > 0 && (
+                  <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
+                    {e.goalChecks.protein && ['morning','lunch','dinner','snack'].map(m => e.goalChecks.protein[m] && (
+                      <span key={m} style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>
+                        🥩 {m === 'morning' ? 'Matin' : m === 'lunch' ? 'Midi' : m === 'dinner' ? 'Soir' : 'Collation'}
+                      </span>
+                    ))}
+                    {e.goalChecks.vegetables?.lunch && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Midi</span>}
+                    {e.goalChecks.vegetables?.dinner && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Soir</span>}
+                    {e.goalChecks.fruits?.done && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🍎 Fruits ✅</span>}
+                  </div>
+                )}
                 {e.notes && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>"{e.notes}"</p>}
               </div>
             ))}

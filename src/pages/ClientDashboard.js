@@ -374,15 +374,40 @@ export default function ClientDashboard() {
                     {entry.weight && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>⚖️ <strong>{entry.weight} kg</strong></span>}
                     {entry.steps > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>👟 <strong>{(+entry.steps).toLocaleString()}</strong> pas</span>}
                     {profile.coachingMode !== 'intuitif' && entry.calories > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🔥 <strong>{entry.calories}</strong> kcal</span>}
-                    {profile.coachingMode !== 'intuitif' && entry.protein > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🥩 <strong>{entry.protein}g</strong> prot</span>}
                     {entry.sleep && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>😴 <strong>{entry.sleep}h</strong></span>}
                     {entry.extraActivity && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏃 {entry.extraActivity}</span>}
                   </div>
-                  {profile.coachingMode === 'intuitif' && entry.goalChecks && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                      {entry.goalChecks.protein && ['morning','lunch','dinner'].map(m => entry.goalChecks.protein[m] &&
-                        <span key={m} style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥩 {m === 'morning' ? 'Matin' : m === 'lunch' ? 'Midi' : 'Soir'}</span>
+                  {/* Macros — mode tracking */}
+                  {profile.coachingMode !== 'intuitif' && (entry.protein > 0 || entry.carbs > 0 || entry.fat > 0) && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+                      {entry.protein > 0 && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#FEF3C7', color: '#92400E', fontWeight: 600 }}>
+                          🥩 {entry.protein}g
+                          {profile.targets?.protein > 0 && <span style={{ opacity: 0.7, fontWeight: 400 }}> / {profile.targets.protein}g</span>}
+                        </span>
                       )}
+                      {entry.carbs > 0 && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#EFF6FF', color: '#1D4ED8', fontWeight: 600 }}>
+                          🌾 {entry.carbs}g
+                          {profile.targets?.carbs > 0 && <span style={{ opacity: 0.7, fontWeight: 400 }}> / {profile.targets.carbs}g</span>}
+                        </span>
+                      )}
+                      {entry.fat > 0 && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#F0FDF4', color: '#15803D', fontWeight: 600 }}>
+                          🥑 {entry.fat}g
+                          {profile.targets?.fat > 0 && <span style={{ opacity: 0.7, fontWeight: 400 }}> / {profile.targets.fat}g</span>}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {/* Objectifs cochés — tous modes */}
+                  {entry.goalChecks && Object.keys(entry.goalChecks).length > 0 && (
+                    <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
+                      {entry.goalChecks.protein && ['morning','lunch','dinner','snack'].map(m => entry.goalChecks.protein[m] && (
+                        <span key={m} style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>
+                          🥩 {m === 'morning' ? 'Matin' : m === 'lunch' ? 'Midi' : m === 'dinner' ? 'Soir' : 'Collation'}
+                        </span>
+                      ))}
                       {entry.goalChecks.vegetables?.lunch && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Midi</span>}
                       {entry.goalChecks.vegetables?.dinner && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Soir</span>}
                       {entry.goalChecks.fruits?.done && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🍎 Fruits ✅</span>}

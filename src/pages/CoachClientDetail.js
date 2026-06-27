@@ -832,7 +832,12 @@ export default function CoachClientDetail() {
             {/* Mensurations de départ pour référence */}
             {client.startMeasurements && (
               <div className="card" style={{ background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)' }}>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>📐 Mensurations de départ</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>📐 Mensurations de départ</div>
+                  <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setActiveTab('vue'); setEditStartData(true); }}>
+                    ✏️ Modifier
+                  </button>
+                </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                   {client.startWeight && (
                     <div style={{ fontSize: 12, padding: '4px 10px', background: 'white', borderRadius: 100, border: '1px solid var(--primary-light)' }}>

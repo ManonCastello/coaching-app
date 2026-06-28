@@ -145,8 +145,18 @@ export default function WeeklyCheckIn({ coachMode }) {
   }
 
   async function handleSave() {
+    if (uploadingSlot) {
+      alert("Une photo est encore en cours d'envoi, attends quelques secondes avant d'enregistrer.");
+      return;
+    }
     setSaving(true);
     try {
+      // Filtrer les URLs blob (upload raté) — ne garder que les URLs Cloudinary
+      const safePhotoURLs = {};
+      Object.entries(photoURLs).forEach(([k, v]) => {
+        if (v && v.startsWith('http')) safePhotoURLs[k] = v;
+      });
+
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey), {
         weekStart: weekKey,
         avgWeight: form.avgWeight ? +form.avgWeight : null,
@@ -164,7 +174,7 @@ export default function WeeklyCheckIn({ coachMode }) {
           stress: form.stress ? +form.stress : null,
           adherence: form.adherence ? +form.adherence : null,
         },
-        photoURLs,
+        photoURLs: safePhotoURLs,
         weekNotes: form.weekNotes,
         weekHighlight: form.weekHighlight,
         weekDifficulty: form.weekDifficulty,
@@ -175,7 +185,10 @@ export default function WeeklyCheckIn({ coachMode }) {
         if (coachMode) navigate('/coach');
         else navigate('/dashboard');
       }, 1400);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de l'enregistrement : " + (e.message || 'vérifie ta connexion et réessaie.'));
+    }
     setSaving(false);
   }
 

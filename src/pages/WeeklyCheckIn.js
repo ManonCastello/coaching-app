@@ -44,6 +44,7 @@ export default function WeeklyCheckIn({ coachMode }) {
   const prevWeekKey = format(startOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const weekLabel = format(new Date(), "'Semaine du' d MMMM yyyy", { locale: fr });
   const [prevMeasurements, setPrevMeasurements] = useState(null);
+  const [weightDaysCount, setWeightDaysCount] = useState(0);
 
   const [form, setForm] = useState({
     waist: '', hips: '', glutes: '', thighs: '', arms: '',
@@ -83,12 +84,14 @@ export default function WeeklyCheckIn({ coachMode }) {
         if (d.photoURLs) setPhotoURLs(d.photoURLs);
       }
 
-      // Calculate week stats from daily entries
+      // Calculate week stats from daily entries — fenêtre des 7 derniers jours AVANT aujourd'hui
       const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-      const weekStart = weekKey;
-      const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
+      const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+      const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+      const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(10));
       const snap = await getDocs(q);
-      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= weekStart);
+      const allDailyEntries = snap.docs.map(d => d.data());
+      const entries = allDailyEntries.filter(e => e.date > sevenDaysAgo && e.date <= yesterday);
       if (entries.length > 0) {
         const days = entries.map(e => ({
           label: format(new Date(e.date), 'EEE', { locale: fr }),
@@ -99,6 +102,13 @@ export default function WeeklyCheckIn({ coachMode }) {
         })).reverse();
         const avg = (key) => Math.round(days.reduce((s, d) => s + d[key], 0) / days.length);
         setWeekStats({ days, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat'), count: days.length });
+      }
+      // Moyenne de poids des 7 derniers jours — pré-remplie si pas déjà saisie
+      const weightEntries = allDailyEntries.filter(e => e.date > sevenDaysAgo && e.date <= yesterday && e.weight);
+      setWeightDaysCount(weightEntries.length);
+      if (weightEntries.length > 0 && !weekDoc.exists()) {
+        const avgW = weightEntries.reduce((s, e) => s + e.weight, 0) / weightEntries.length;
+        setForm(p => ({ ...p, avgWeight: +avgW.toFixed(1) }));
       }
       setLoading(false);
     }
@@ -212,6 +222,11 @@ export default function WeeklyCheckIn({ coachMode }) {
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>⚖️ Poids moyen de la semaine</div>
           <input className="input" type="number" value={form.avgWeight} onChange={e => set('avgWeight', e.target.value)} placeholder="ex: 63.8" step="0.1" />
+          {weightDaysCount > 0 && (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              💡 Moyenne calculée sur {weightDaysCount} pesée{weightDaysCount > 1 ? 's' : ''} des 7 derniers jours. Modifiable si besoin.
+            </p>
+          )}
         </div>
 
         {/* Measurements */}

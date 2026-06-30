@@ -15,6 +15,9 @@ export default function CoachClientDetail() {
   const [client, setClient] = useState(null);
   const [entries, setEntries] = useState([]);
   const [weeklyEntries, setWeeklyEntries] = useState([]);
+  const [editingWeekly, setEditingWeekly] = useState(null);
+  const [weeklyEditForm, setWeeklyEditForm] = useState({});
+  const [savingWeekly, setSavingWeekly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editTargets, setEditTargets] = useState(false);
   const [targetsValidFrom, setTargetsValidFrom] = useState('');
@@ -165,6 +168,80 @@ export default function CoachClientDetail() {
       window.location.reload();
     } catch(e) { console.error(e); }
     setSaving(false);
+  }
+
+  function startEditWeekly(w) {
+    setEditingWeekly(w.weekStart);
+    setWeeklyEditForm({
+      avgWeight: w.avgWeight || '',
+      waist: w.measurements?.waist || '',
+      hips: w.measurements?.hips || '',
+      glutes: w.measurements?.glutes || '',
+      thighs: w.measurements?.thighs || '',
+      arms: w.measurements?.arms || '',
+      energy: w.questionnaire?.energy || '',
+      hunger: w.questionnaire?.hunger || '',
+      motivation: w.questionnaire?.motivation || '',
+      stress: w.questionnaire?.stress || '',
+      adherence: w.questionnaire?.adherence || '',
+      weekHighlight: w.weekHighlight || '',
+      weekDifficulty: w.weekDifficulty || '',
+      weekNotes: w.weekNotes || '',
+      photoFace: w.photoURLs?.face || '',
+      photoProfile: w.photoURLs?.profile || '',
+      photoBack: w.photoURLs?.back || '',
+    });
+  }
+
+  async function saveWeeklyEdit(weekStart) {
+    setSavingWeekly(true);
+    try {
+      const f = weeklyEditForm;
+      await setDoc(doc(db, 'clients', clientId, 'weeklyEntries', weekStart), {
+        avgWeight: f.avgWeight ? +f.avgWeight : null,
+        measurements: {
+          waist: f.waist ? +f.waist : null,
+          hips: f.hips ? +f.hips : null,
+          glutes: f.glutes ? +f.glutes : null,
+          thighs: f.thighs ? +f.thighs : null,
+          arms: f.arms ? +f.arms : null,
+        },
+        questionnaire: {
+          energy: f.energy ? +f.energy : null,
+          hunger: f.hunger ? +f.hunger : null,
+          motivation: f.motivation ? +f.motivation : null,
+          stress: f.stress ? +f.stress : null,
+          adherence: f.adherence ? +f.adherence : null,
+        },
+        photoURLs: {
+          face: f.photoFace || null,
+          profile: f.photoProfile || null,
+          back: f.photoBack || null,
+        },
+        weekHighlight: f.weekHighlight,
+        weekDifficulty: f.weekDifficulty,
+        weekNotes: f.weekNotes,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      const weeklyQ = query(collection(db, 'clients', clientId, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(12));
+      const weeklySnap = await getDocs(weeklyQ);
+      setWeeklyEntries(weeklySnap.docs.map(d => d.data()).reverse());
+      setEditingWeekly(null);
+    } catch(e) { console.error(e); alert('Erreur lors de la sauvegarde.'); }
+    setSavingWeekly(false);
+  }
+
+  async function handleWeeklyPhotoUpload(field, file) {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', 'fitlog_photos');
+    fd.append('public_id', `fitlog/${clientId}/${editingWeekly}_${field}_coachedit_${Date.now()}`);
+    try {
+      const res = await fetch('https://api.cloudinary.com/v1_1/dduaqnygn/image/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.secure_url) setWeeklyEditForm(p => ({ ...p, [field]: data.secure_url }));
+    } catch(e) { console.error(e); alert('Erreur upload photo.'); }
   }
 
   async function resetWeekBalance() {
@@ -860,10 +937,113 @@ export default function CoachClientDetail() {
             )}
             {[...weeklyEntries].reverse().map(w => (
               <div key={w.weekStart} className="card">
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
-                  Semaine du {format(new Date(w.weekStart), 'd MMM', { locale: fr })}
-                  {w.avgWeight && <span className="badge badge-primary" style={{ marginLeft: 8 }}>{w.avgWeight} kg</span>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    Semaine du {format(new Date(w.weekStart), 'd MMM', { locale: fr })}
+                    {w.avgWeight && <span className="badge badge-primary" style={{ marginLeft: 8 }}>{w.avgWeight} kg</span>}
+                  </div>
+                  {editingWeekly !== w.weekStart && (
+                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => startEditWeekly(w)}>✏️ Modifier</button>
+                  )}
                 </div>
+
+                {editingWeekly === w.weekStart ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {/* Poids */}
+                    <div className="input-group">
+                      <label className="input-label">⚖️ Poids moyen (kg)</label>
+                      <input className="input" type="number" step="0.1" value={weeklyEditForm.avgWeight} onChange={e => setWeeklyEditForm(p => ({ ...p, avgWeight: e.target.value }))} />
+                    </div>
+                    {/* Mensurations */}
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>📏 Mensurations (cm)</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        {[
+                          { key: 'waist', label: 'Taille' },
+                          { key: 'hips', label: 'Hanches' },
+                          { key: 'glutes', label: 'Fesses' },
+                          { key: 'thighs', label: 'Cuisses' },
+                          { key: 'arms', label: 'Bras' },
+                        ].map(m => (
+                          <div key={m.key} className="input-group">
+                            <label className="input-label" style={{ fontSize: 11 }}>{m.label}</label>
+                            <input className="input" type="number" step="0.5" value={weeklyEditForm[m.key]} onChange={e => setWeeklyEditForm(p => ({ ...p, [m.key]: e.target.value }))} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Photos */}
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>📸 Photos</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        {[
+                          { key: 'photoFace', label: 'Face' },
+                          { key: 'photoProfile', label: 'Profil' },
+                          { key: 'photoBack', label: 'Dos' },
+                        ].map(slot => (
+                          <div key={slot.key} style={{ textAlign: 'center' }}>
+                            <label style={{ display: 'block', width: '100%', aspectRatio: '3/4', borderRadius: 8, border: `2px dashed ${weeklyEditForm[slot.key] ? 'var(--primary)' : 'var(--border)'}`, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
+                              {weeklyEditForm[slot.key] ? (
+                                <img src={weeklyEditForm[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 24, color: 'var(--text-light)' }}>+</div>
+                              )}
+                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleWeeklyPhotoUpload(slot.key, e.target.files[0])} />
+                            </label>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Questionnaire */}
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>🎯 Ressenti (1-5)</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {[
+                          { key: 'energy', label: '⚡ Énergie' },
+                          { key: 'hunger', label: '🍽️ Gestion faim' },
+                          { key: 'motivation', label: '💪 Motivation' },
+                          { key: 'stress', label: '🧘 Stress' },
+                          { key: 'adherence', label: '🎯 Adhérence' },
+                        ].map(q => (
+                          <div key={q.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 12 }}>{q.label}</span>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              {[1,2,3,4,5].map(n => (
+                                <button key={n} type="button" onClick={() => setWeeklyEditForm(p => ({ ...p, [q.key]: n }))} style={{
+                                  width: 28, height: 28, borderRadius: 6, border: `1.5px solid ${+weeklyEditForm[q.key] === n ? 'var(--primary)' : 'var(--border)'}`,
+                                  background: +weeklyEditForm[q.key] === n ? 'var(--primary)' : 'white',
+                                  color: +weeklyEditForm[q.key] === n ? 'white' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                                }}>{n}</button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Notes */}
+                    <div className="input-group">
+                      <label className="input-label" style={{ fontSize: 11 }}>🌟 Point positif</label>
+                      <textarea className="input" rows={2} value={weeklyEditForm.weekHighlight} onChange={e => setWeeklyEditForm(p => ({ ...p, weekHighlight: e.target.value }))} />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label" style={{ fontSize: 11 }}>⚠️ Difficulté</label>
+                      <textarea className="input" rows={2} value={weeklyEditForm.weekDifficulty} onChange={e => setWeeklyEditForm(p => ({ ...p, weekDifficulty: e.target.value }))} />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label" style={{ fontSize: 11 }}>📝 Notes</label>
+                      <textarea className="input" rows={2} value={weeklyEditForm.weekNotes} onChange={e => setWeeklyEditForm(p => ({ ...p, weekNotes: e.target.value }))} />
+                    </div>
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditingWeekly(null)}>Annuler</button>
+                      <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => saveWeeklyEdit(w.weekStart)} disabled={savingWeekly}>
+                        {savingWeekly ? 'Enregistrement...' : '✅ Enregistrer'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 {w.questionnaire && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                     {Object.entries(w.questionnaire).filter(([,v]) => v).map(([k,v]) => (
@@ -910,6 +1090,8 @@ export default function CoachClientDetail() {
                       })}
                     </div>
                   </div>
+                )}
+                  </>
                 )}
               </div>
             ))}

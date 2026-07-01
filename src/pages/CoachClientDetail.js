@@ -245,35 +245,20 @@ export default function CoachClientDetail() {
   }
 
   async function resetWeekBalance() {
-    const { format, startOfWeek } = await import('date-fns');
-    const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    // Load current entries to calculate current balance
+    if (!window.confirm('Remettre la balance à zéro ? Cela modifiera le dailyBalance du dernier jour verrouillé.')) return;
     const { collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } = await import('firebase/firestore');
-    const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
+    const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(14));
     const snap = await getDocs(q);
-    const entries = snap.docs.map(d => d.data());
-    const t = client.targets || {};
-    let totalDiff = 0;
-    entries.forEach(e => {
-      if (e.date >= weekKey && e.calories) {
-        let target;
-        if (e.locked && e.dailyTarget != null) {
-          target = e.dailyTarget;
-        } else {
-          const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
-          const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
-          const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
-          target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
-        }
-        totalDiff += (e.calories - target);
-      }
-    });
-    // Store negative offset to zero it out
-    await setDoc(doc(db, 'clients', clientId, 'weekResets', weekKey), {
-      offset: -Math.round(totalDiff),
-      resetAt: serverTimestamp(),
-    });
+    const today = new Date().toISOString().split('T')[0];
+    const entries = snap.docs.map(d => ({ ref: d.ref, ...d.data() }));
+    const lastLocked = entries.find(e => e.locked && e.date !== today);
+    if (!lastLocked) {
+      alert('Aucun jour verrouillé trouvé pour remettre à zéro.');
+      return;
+    }
+    await setDoc(lastLocked.ref, { dailyBalance: 0, resetAt: serverTimestamp() }, { merge: true });
     setSaved(true); setTimeout(() => setSaved(false), 2000);
+    window.location.reload();
   }
 
 
@@ -850,8 +835,20 @@ export default function CoachClientDetail() {
                   )}
                   {e.extraActivity && <span style={{ fontSize: 12, color: 'var(--primary)' }}>🏃 +{e.extraActivityCal} kcal</span>}
                   {e.dailyBalance !== null && e.dailyBalance !== undefined && (
-                    <span style={{ fontSize: 12, fontWeight: 700, color: e.dailyBalance > 0 ? 'var(--warning)' : 'var(--success)' }}>
-                      Balance: {e.dailyBalance > 0 ? '+' : ''}{e.dailyBalance} kcal
+                    <span
+                      style={{ fontSize: 12, fontWeight: 700, color: e.dailyBalance > 0 ? 'var(--warning)' : 'var(--success)', cursor: 'pointer', textDecoration: 'underline dotted' }}
+                      title="Cliquer pour corriger la balance"
+                      onClick={async () => {
+                        const val = window.prompt(`Corriger la balance de ${e.date} (kcal cumulatif) :`, e.dailyBalance);
+                        if (val === null) return;
+                        const parsed = parseInt(val, 10);
+                        if (isNaN(parsed)) { alert('Valeur invalide.'); return; }
+                        const { doc: d, setDoc: sd, serverTimestamp: st } = await import('firebase/firestore');
+                        await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { dailyBalance: parsed }, { merge: true });
+                        window.location.reload();
+                      }}
+                    >
+                      Balance: {e.dailyBalance > 0 ? '+' : ''}{e.dailyBalance} kcal ✏️
                     </span>
                   )}
                 </div>

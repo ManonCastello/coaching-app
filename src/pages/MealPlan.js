@@ -35,11 +35,16 @@ const FOODS = {
     { id: 'huile', name: "Huile d'olive", emoji: '🫒', kcal: 900, prot: 0, lip: 100, gluc: 0, baseGrams: 5, baseLabel: '1 c.a.c (5ml)', altLabel: function(n) { return (Math.round(n*10)/10) + ' c.a.c'; } },
     { id: 'avocat', name: 'Avocat', emoji: '🥑', kcal: 220, prot: 2, lip: 22, gluc: 3.5, baseGrams: 80, baseLabel: '1/2 avocat (80g)', altLabel: function(n) { return Math.round(n*80) + 'g'; } },
     { id: 'amandes', name: 'Amandes', emoji: '🥜', kcal: 600, prot: 21, lip: 53, gluc: 21, baseGrams: 10, baseLabel: '10g = 7-8 amandes', altLabel: function(n) { return Math.round(n*10) + 'g'; } },
-    { id: 'bdc', name: 'Beurre de cacahuete', emoji: '🥜', kcal: 620, prot: 29, lip: 50, gluc: 12, baseGrams: 10, baseLabel: '1 c.a.c (10g)', altLabel: function(n) { return (Math.round(n*10)/10) + ' c.a.c'; } },
+    { id: 'bdc', name: 'Beurre de cacahuete', emoji: '🥜', kcal: 620, prot: 29, lip: 50, gluc: 12, baseGrams: 15, baseLabel: '1 c.a.c rase (15g)', altLabel: function(n) { return (Math.round(n*10)/10) + ' c.a.c'; } },
+    { id: 'fromage', name: 'Fromage', emoji: '🧀', kcal: 400, prot: 23.3, lip: 30, gluc: 6, baseGrams: 15, baseLabel: '1 doigt (15g)', altLabel: function(n) { return Math.round(n*15) + 'g'; } },
+  ],
+  plaisir: [
+    { id: 'chocolat', name: 'Chocolat noir 85%', emoji: '🍫', kcal: 637, prot: 7.8, lip: 54, gluc: 24, baseGrams: 10, baseLabel: '1 carré (10g)', altLabel: function(n) { return (Math.round(n*10)/10) + ' carré(s)'; } },
+    { id: 'nutella', name: 'Pâte à tartiner', emoji: '🍯', kcal: 541, prot: 5.4, lip: 29.7, gluc: 56.8, baseGrams: 10, baseLabel: '1 c.a.c rase (10g)', altLabel: function(n) { return (Math.round(n*10)/10) + ' c.a.c'; } },
   ],
 };
 
-const ALL_FOODS = [...FOODS.protein, ...FOODS.carbs, ...FOODS.fat];
+const ALL_FOODS = [...FOODS.protein, ...FOODS.carbs, ...FOODS.fat, ...FOODS.plaisir];
 const VEG_KCAL = 160, VEG_PROT = 5, VEG_GLUC = 18, VEG_LIP = 0.5;
 const FRUIT_KCAL = 180;
 
@@ -55,6 +60,7 @@ const CATS = [
   { key: 'protein', label: 'Proteines', emoji: '🥩', color: '#7C3AED' },
   { key: 'carbs', label: 'Glucides', emoji: '🍚', color: '#EC4899' },
   { key: 'fat', label: 'Lipides', emoji: '🥑', color: '#F59E0B' },
+  { key: 'plaisir', label: 'Plaisir', emoji: '🎉', color: '#EF4444' },
 ];
 
 function macrosForPortions(portions) {
@@ -77,7 +83,7 @@ export default function MealPlan() {
   const { currentUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [mealSplit, setMealSplit] = useState(null);
-  const [customFoods, setCustomFoods] = useState({ protein: [], carbs: [], fat: [] });
+  const [customFoods, setCustomFoods] = useState({ protein: [], carbs: [], fat: [], plaisir: [] });
   const [loading, setLoading] = useState(true);
   const [activeMeal, setActiveMeal] = useState('lunch');
   const [portions, setPortions] = useState({});
@@ -90,7 +96,7 @@ export default function MealPlan() {
         var data = profileDoc.data();
         setProfile(data);
         setMealSplit(data.mealSplit || null);
-        setCustomFoods(data.customFoods || { protein: [], carbs: [], fat: [] });
+        setCustomFoods(data.customFoods || { protein: [], carbs: [], fat: [], plaisir: [] });
         var h = new Date().getHours();
         if (h < 10) setActiveMeal('morning');
         else if (h < 15) setActiveMeal('lunch');
@@ -152,6 +158,7 @@ export default function MealPlan() {
     protein: FOODS.protein.concat(customFoods.protein || []),
     carbs: FOODS.carbs.concat(customFoods.carbs || []),
     fat: FOODS.fat.concat(customFoods.fat || []),
+    plaisir: FOODS.plaisir.concat(customFoods.plaisir || []),
   };
 
   function suggestQty(food, macroKey) {

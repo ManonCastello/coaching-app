@@ -384,7 +384,10 @@ export default function MealPlan() {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px', background: '#FEF3C7', borderRadius: 10 }}>
             <span style={{ fontSize: 28 }}>🍎</span>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              ~180 kcal déjà déduits de ton objectif journalier · 1 fruit = 50–80 kcal · Pas en jus
+              {isIntuitif
+                ? 'Mange 2 à 3 fruits par jour. Pas en jus.'
+                : '~180 kcal déjà déduits de ton objectif journalier · 1 fruit = 50–80 kcal · Pas en jus'
+              }
             </div>
           </div>
         </div>

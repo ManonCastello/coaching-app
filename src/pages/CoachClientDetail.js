@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS } from '../utils/calculations';
 import PhotoViewer from '../components/PhotoViewer';
 
@@ -863,6 +863,7 @@ export default function CoachClientDetail() {
               const wStart7 = w.weekStart;
               const wEnd = format(new Date(new Date(w.weekStart).getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
               const wDays = entries.filter(e => e.date >= wStart7 && e.date <= wEnd && (e.calories || e.protein));
+              const wDaysChart = wDays.map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0 }));
               const avg = (key) => wDays.length ? Math.round(wDays.reduce((s, e) => s + (e[key] || 0), 0) / wDays.length) : null;
               const wStats = wDays.length > 0 ? {
                 count: wDays.length,
@@ -930,6 +931,20 @@ export default function CoachClientDetail() {
                 {wStats && client.coachingMode !== 'intuitif' && (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 10 }}>📊 Résumé nutritionnel · {wStats.count} jour{wStats.count > 1 ? 's' : ''}</div>
+
+                    {/* Graphique barres */}
+                    <ResponsiveContainer width="100%" height={130}>
+                      <BarChart data={wDaysChart} barSize={18}>
+                        <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} width={30} />
+                        <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} formatter={(v) => [`${v} kcal`, 'Calories']} />
+                        <Bar dataKey="calories" radius={[4,4,0,0]}>
+                          {wDaysChart.map((d, i) => (
+                            <Cell key={i} fill={d.calories >= (client.targets?.calories || 2000) * 0.9 ? '#7C3AED' : '#C4B5FD'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {[
                         { label: '🔥 Calories moy.', avg: wStats.avgCalories, target: client.targets?.calories, unit: 'kcal', color: 'var(--primary)' },

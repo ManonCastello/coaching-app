@@ -965,7 +965,6 @@ export default function CoachClientDetail() {
             );
           })}
           </div>
-          </div>
         )}
 
         {/* TARGETS */}

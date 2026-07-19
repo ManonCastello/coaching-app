@@ -860,9 +860,9 @@ export default function CoachClientDetail() {
             )}
             {[...weeklyEntries].reverse().map(w => {
               // Calculer les stats nutritionnelles pour les 7 jours de ce bilan
-              const wEnd = w.weekStart;
-              const wStart7 = format(subDays(new Date(wEnd), 7), 'yyyy-MM-dd');
-              const wDays = entries.filter(e => e.date > wStart7 && e.date <= wEnd && (e.calories || e.protein));
+              const wStart7 = w.weekStart;
+              const wEnd = format(new Date(new Date(w.weekStart).getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+              const wDays = entries.filter(e => e.date >= wStart7 && e.date <= wEnd && (e.calories || e.protein));
               const avg = (key) => wDays.length ? Math.round(wDays.reduce((s, e) => s + (e[key] || 0), 0) / wDays.length) : null;
               const wStats = wDays.length > 0 ? {
                 count: wDays.length,

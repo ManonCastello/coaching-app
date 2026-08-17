@@ -596,10 +596,8 @@ export default function CoachClientDetail() {
             </div>
 
 
-            {/* Données de départ */}
+            {/* ── COACHING ── */}
             <div className="card" style={{ marginBottom: 16 }}>
-              {/* ── COACHING ── */}
-              <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>⚜️ Suivi du coaching</div>
                   <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditCoaching(!editCoaching)}>

@@ -198,8 +198,6 @@ export default function WeeklyCheckIn({ coachMode }) {
         </div>
         <div style={{ width: 24 }} />
       </div>
-        <div style={{ width: 24 }} />
-      </div>
 
       <div className="page">
         <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>📅 {weekLabel}</p>

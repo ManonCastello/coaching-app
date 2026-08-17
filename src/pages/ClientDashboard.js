@@ -6,7 +6,6 @@ import { db } from '../firebase';
 import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, getDay, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LineChart, Line, ResponsiveContainer, Tooltip, CartesianGrid, XAxis, YAxis } from 'recharts';
 import TabBar from '../components/TabBar';
 import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
@@ -240,61 +239,6 @@ export default function ClientDashboard() {
                   <div style={{ marginTop: 12, textAlign: 'center' }}>
                     <a href="/checkin/daily" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>✏️ Compléter mon suivi du jour →</a>
                   </div>
-                </div>
-              </>
-            )}
-
-            {/* Mes progrès */}
-            {(profile.startWeight || profile.startMeasurements) && (
-              <>
-                <h2 className="section-title">Mes progrès</h2>
-                <div className="card" style={{ marginBottom: 20 }}>
-                  {profile.startWeight && (() => {
-                    const currentW = todayWeight || lastWeeklyEntry?.avgWeight || null;
-                    const deltaW = currentW ? +(currentW - profile.startWeight).toFixed(1) : null;
-                    return (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border-light)' }}>
-                        <div><span style={{ fontSize: 14, fontWeight: 600 }}>⚖️ Poids</span><span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {profile.startWeight} kg</span></div>
-                        {deltaW !== null ? <span style={{ fontWeight: 800, fontSize: 16, color: deltaW < 0 ? 'var(--success)' : deltaW > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{deltaW > 0 ? '+' : ''}{deltaW} kg</span> : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>—</span>}
-                      </div>
-                    );
-                  })()}
-                  {profile.startMeasurements && lastWeeklyEntry?.measurements && [
-                    { key: 'waist', label: 'Taille', emoji: '👗' },
-                    { key: 'hips', label: 'Hanches', emoji: '🔵' },
-                    { key: 'glutes', label: 'Fesses', emoji: '🍑' },
-                    { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
-                    { key: 'arms', label: 'Bras', emoji: '💪' },
-                  ].map((m, i, arr) => {
-                    const startVal = profile.startMeasurements[m.key];
-                    const currentVal = lastWeeklyEntry.measurements[m.key];
-                    if (!startVal || !currentVal) return null;
-                    const delta = +(currentVal - startVal).toFixed(1);
-                    return (
-                      <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                        <div><span style={{ fontSize: 14, fontWeight: 600 }}>{m.emoji} {m.label}</span><span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {startVal} cm</span></div>
-                        <span style={{ fontWeight: 800, fontSize: 16, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{delta > 0 ? '+' : ''}{delta} cm</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            {/* Évolution du poids */}
-            {recentEntries.filter(e => e.weight).length > 1 && (
-              <>
-                <h2 className="section-title">Évolution du poids</h2>
-                <div className="card" style={{ marginBottom: 20, padding: '16px 8px 8px' }}>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <LineChart data={recentEntries.filter(e => e.weight)}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
-                      <XAxis dataKey="date" tickFormatter={d => format(new Date(d), 'dd/MM', { locale: fr })} tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                      <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} width={35} />
-                      <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: 'var(--primary)' }} />
-                      <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={v => [`${v} kg`, 'Poids']} labelFormatter={d => format(new Date(d), 'dd/MM/yyyy', { locale: fr })} />
-                    </LineChart>
-                  </ResponsiveContainer>
                 </div>
               </>
             )}

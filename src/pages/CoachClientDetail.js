@@ -881,9 +881,12 @@ export default function CoachClientDetail() {
                           const dailyBalance = e.calories > 0 ? e.calories - dailyTarget : null;
                           await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: true, dailyTarget, dailyBalance, lockedAt: st() }, { merge: true });
                         }
-                        // Recharger les entries sans quitter la page
-                        const snap = await gd(q2(col(db, 'clients', clientId, 'dailyEntries'), ob('date', 'desc'), lim(30)));
-                        setEntries(snap.docs.map(doc => doc.data()));
+                        // Mettre à jour uniquement l'entry dans le state local
+                        setEntries(prev => prev.map(entry =>
+                          entry.date === e.date
+                            ? { ...entry, locked: !e.locked, dailyBalance: e.locked ? null : null, dailyTarget: e.locked ? null : null }
+                            : entry
+                        ));
                       }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
                       title={e.locked ? 'Déverrouiller' : 'Valider la journée'}

@@ -377,12 +377,19 @@ export default function CoachClientDetail() {
   const weightDelta = firstWeight && lastWeight ? Math.round((lastWeight - firstWeight) * 10) / 10 : null;
   const avgCalories = entries.length ? Math.round(entries.reduce((s, e) => s + (e.calories || 0), 0) / entries.length) : 0;
   const avgSteps = entries.length ? Math.round(entries.reduce((s, e) => s + (e.steps || 0), 0) / entries.length) : 0;
-  // Séances : compter uniquement lundi-dimanche de la semaine en cours
   const currentWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const currentWeekEnd = format(new Date(), 'yyyy-MM-dd');
   const thisWeekEntries = entries.filter(e => e.date >= currentWeekStart && e.date <= currentWeekEnd);
   const sessionsDone = thisWeekEntries.filter(e => e.didProgramSession === true).length;
   const sessionsTarget = client.targets?.sessionsPerWeek || 3;
+
+  // Balance semaine : dailyBalance du dernier jour verrouillé (hors aujourd'hui)
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const prevEntries = [...entries].sort((a,b) => b.date.localeCompare(a.date)).filter(e => e.date !== todayStr);
+  const lastLocked = prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
+  const coachWeekBalance = lastLocked ? Math.round(lastLocked.dailyBalance) : 0;
+  const [editBalance, setEditBalance] = useState(false);
+  const [balanceInput, setBalanceInput] = useState('');
 
   const tabs = [
     { key: 'overview', label: '📊 Vue' },
@@ -463,7 +470,7 @@ export default function CoachClientDetail() {
 
             {vueTab === 'stats' && (
               <>
-            <div className="stat-grid" style={{ marginBottom: 20 }}>
+            <div className="stat-grid" style={{ marginBottom: 16 }}>
               <div className="stat-card">
                 <div className="stat-label">Dernier poids</div>
                 <div className="stat-value" style={{ color: 'var(--primary)' }}>{lastWeight || '—'}<span className="stat-unit">kg</span></div>
@@ -474,13 +481,50 @@ export default function CoachClientDetail() {
               <div className="stat-card"><div className="stat-label">Séances sem.</div><div className="stat-value">{sessionsDone}<span className="stat-unit">/ {sessionsTarget}</span></div></div>
             </div>
 
-
-            {/* Edit client info */}
-            <div className="card" style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editInfo ? 16 : 0 }}>
+            {/* Balance semaine */}
+            {client.coachingMode !== 'intuitif' && (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editBalance ? 12 : 0 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>⚖️ Balance calorique semaine</div>
+                    {!editBalance && (
+                      <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: coachWeekBalance > 200 ? 'var(--warning)' : coachWeekBalance < -200 ? 'var(--danger)' : 'var(--success)' }}>
+                        {coachWeekBalance > 0 ? '+' : ''}{coachWeekBalance} kcal
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setEditBalance(!editBalance); setBalanceInput(String(coachWeekBalance)); }}>
+                      {editBalance ? 'Annuler' : '✏️ Modifier'}
+                    </button>
+                    {!editBalance && (
+                      <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={resetWeekBalance}>
+                        🔄 Zéro
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {editBalance && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                    <input className="input" type="number" value={balanceInput} onChange={e => setBalanceInput(e.target.value)} style={{ flex: 1 }} placeholder="ex: -200" />
+                    <button className="btn btn-primary" style={{ width: 'auto' }} onClick={async () => {
+                      if (!lastLocked) return;
+                      const { doc: d, setDoc: sd } = await import('firebase/firestore');
+                      await sd(d(db, 'clients', clientId, 'dailyEntries', lastLocked.date), { dailyBalance: +balanceInput }, { merge: true });
+                      setEntries(prev => prev.map(e => e.date === lastLocked.date ? { ...e, dailyBalance: +balanceInput } : e));
+                      setEditBalance(false);
+                    }}>✅ OK</button>
+                  </div>
+                )}
+              </div>
+            )}
+            {vueTab === 'infos' && (
+              <>
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editInfo ? 16 : 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>👤 Informations client</div>
-                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditInfo(!editInfo)}>
-                  {editInfo ? 'Annuler' : 'Modifier'}
+                <button className="btn btn-secondary btn-sm" style={{ width: "auto" }} onClick={() => setEditInfo(!editInfo)}>
+                  {editInfo ? "Annuler" : "Modifier"}
                 </button>
               </div>
               {!editInfo ? (
@@ -615,8 +659,6 @@ export default function CoachClientDetail() {
               </>
             )}
 
-            {vueTab === 'infos' && (
-              <>
             {/* ── COACHING ── */}
             <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>

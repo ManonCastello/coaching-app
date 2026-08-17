@@ -276,21 +276,6 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
-        {saved && (
-          <div className="alert alert-success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>✅ Suivi enregistré !</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {!isLocked && (
-                <button onClick={handleLock} style={{ background: 'var(--success)', color: 'white', border: 'none', borderRadius: 8, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                  🔒 Valider
-                </button>
-              )}
-              <button onClick={() => coachMode ? navigate('/coach') : navigate('/dashboard')} style={{ background: 'none', border: '1.5px solid var(--success)', color: 'var(--success)', borderRadius: 8, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                Retour
-              </button>
-            </div>
-          </div>
-        )}
         {existing && !saved && !isLocked && (
           <div style={{ background: 'var(--primary-bg)', border: '1px solid var(--primary-light)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--primary)' }}>
             ✏️ Données existantes — tu peux les modifier.
@@ -637,6 +622,24 @@ export default function DailyCheckIn({ coachMode }) {
           </button>
         )}
       </div>
+
+      {/* Toast fixe en bas */}
+      {saved && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          background: '#16A34A', color: 'white', borderRadius: 50,
+          padding: '12px 24px', fontWeight: 700, fontSize: 14,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.2)', zIndex: 9999,
+          display: 'flex', gap: 12, alignItems: 'center', whiteSpace: 'nowrap',
+        }}>
+          ✅ Suivi enregistré !
+          <button onClick={() => coachMode ? navigate('/coach') : navigate('/dashboard')} style={{
+            background: 'rgba(255,255,255,0.25)', border: 'none', color: 'white',
+            borderRadius: 20, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            fontFamily: 'var(--font-body)',
+          }}>Retour</button>
+        </div>
+      )}
 
       {!coachMode && <TabBar />}
     </div>

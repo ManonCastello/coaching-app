@@ -30,6 +30,7 @@ export default function CoachClientDetail() {
   function setI(key, val) { setInfoForm(p => ({ ...p, [key]: val })); }
   // Données de départ
   const [editStartData, setEditStartData] = useState(false);
+  const [vueTab, setVueTab] = useState('stats'); // 'stats' | 'infos'
   const [startForm, setStartForm] = useState({ weight: '', waist: '', hips: '', glutes: '', thighs: '', arms: '' });
   const [startPhotos, setStartPhotos] = useState({ face: null, profile: null, back: null });
   const [uploadingSlot, setUploadingSlot] = useState(null);
@@ -447,6 +448,21 @@ export default function CoachClientDetail() {
         {/* OVERVIEW */}
         {activeTab === 'overview' && (
           <>
+            {/* Sous-onglets Vue */}
+            <div style={{ display: 'flex', borderBottom: '2px solid var(--border-light)', marginBottom: 16 }}>
+              {[{ key: 'stats', label: '📊 Données' }, { key: 'infos', label: '👤 Infos & Paramètres' }].map(t => (
+                <button key={t.key} onClick={() => setVueTab(t.key)} style={{
+                  flex: 1, padding: '9px 0', border: 'none', background: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: vueTab === t.key ? 700 : 400,
+                  color: vueTab === t.key ? 'var(--primary)' : 'var(--text-muted)',
+                  borderBottom: vueTab === t.key ? '2px solid var(--primary)' : '2px solid transparent',
+                  marginBottom: -2,
+                }}>{t.label}</button>
+              ))}
+            </div>
+
+            {vueTab === 'stats' && (
+              <>
             <div className="stat-grid" style={{ marginBottom: 20 }}>
               <div className="stat-card">
                 <div className="stat-label">Dernier poids</div>
@@ -596,6 +612,11 @@ export default function CoachClientDetail() {
             </div>
 
 
+              </>
+            )}
+
+            {vueTab === 'infos' && (
+              <>
             {/* ── COACHING ── */}
             <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -826,6 +847,8 @@ export default function CoachClientDetail() {
                 </div>
               )}
             </div>
+              </>
+            )}
           </>
         )}
 
@@ -845,11 +868,10 @@ export default function CoachClientDetail() {
                     {/* Bouton lock/unlock coach */}
                     <button
                       onClick={async () => {
-                        const { doc: d, setDoc: sd, serverTimestamp: st } = await import('firebase/firestore');
+                        const { doc: d, setDoc: sd, serverTimestamp: st, collection: col, query: q2, orderBy: ob, getDocs: gd, limit: lim } = await import('firebase/firestore');
                         if (e.locked) {
-                          await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: false }, { merge: true });
+                          await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: false, dailyBalance: null, dailyTarget: null }, { merge: true });
                         } else {
-                          // Utiliser les targets historiques de la date du jour verrouillé
                           const { getTargetsForDate } = await import('../utils/getTargetsForDate');
                           const t = await getTargetsForDate(clientId, e.date, client.targets || {});
                           const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
@@ -859,7 +881,9 @@ export default function CoachClientDetail() {
                           const dailyBalance = e.calories > 0 ? e.calories - dailyTarget : null;
                           await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: true, dailyTarget, dailyBalance, lockedAt: st() }, { merge: true });
                         }
-                        window.location.reload();
+                        // Recharger les entries sans quitter la page
+                        const snap = await gd(q2(col(db, 'clients', clientId, 'dailyEntries'), ob('date', 'desc'), lim(30)));
+                        setEntries(snap.docs.map(doc => doc.data()));
                       }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}
                       title={e.locked ? 'Déverrouiller' : 'Valider la journée'}

@@ -25,6 +25,7 @@ export default function ClientDashboard() {
   const [allEntries, setAllEntries] = useState([]);
   const [journalLimit, setJournalLimit] = useState(7);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('today');
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayLabel = format(new Date(), "EEEE d MMMM yyyy", { locale: fr });
@@ -38,15 +39,7 @@ export default function ClientDashboard() {
       const p = profileDoc.data();
       setProfile(p);
 
-      // Lancer tous les appels en parallèle
-      const [
-        weekDoc,
-        todayDoc,
-        entriesSnap,
-        resetDoc,
-        weeklySnap,
-        wgSnap,
-      ] = await Promise.all([
+      const [weekDoc, todayDoc, entriesSnap, resetDoc, weeklySnap, wgSnap] = await Promise.all([
         (p.weeklyBilanDay !== undefined && p.weeklyBilanDay === todayDayOfWeek)
           ? getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey))
           : Promise.resolve(null),
@@ -64,22 +57,19 @@ export default function ClientDashboard() {
       }
 
       const entries = entriesSnap.docs.map(d => d.data());
-      setAllEntries(entries); // desc order pour le journal
-      setRecentEntries([...entries].slice(0, 7).reverse()); // asc order pour le graphique
+      setAllEntries(entries);
+      setRecentEntries([...entries].slice(0, 7).reverse());
 
       if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
       if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
-      // Balance calorique — utilise la valeur figée stockée à la sauvegarde
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const allEntries = entries.filter(e => e.date !== todayStr);
-        const lastLocked = allEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
+        const prevEntries = entries.filter(e => e.date !== todayStr);
+        const lastLocked = prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
         setWeekBalance(lastLocked ? Math.round(lastLocked.dailyBalance) : 0);
       }
-    } catch (e) {
-      console.error('loadData error:', e);
-    }
+    } catch (e) { console.error('loadData error:', e); }
     setLoading(false);
   }
 
@@ -93,16 +83,11 @@ export default function ClientDashboard() {
     <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
       <div style={{ fontSize: 64, marginBottom: 20 }}>⚜️</div>
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Pas encore de profil élève</h2>
-      <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 32, lineHeight: 1.6 }}>
-        Pour accéder à ton espace élève et suivre ton programme, crée d'abord ton profil.
-      </p>
       <Link to="/register" style={{ textDecoration: 'none' }}>
         <button className="btn btn-primary">Créer mon profil élève</button>
       </Link>
       {userRole === 'coach' && (
-        <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={handleToggle}>
-          ← Retour espace coach
-        </button>
+        <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={handleToggle}>← Retour espace coach</button>
       )}
     </div>
   );
@@ -111,18 +96,18 @@ export default function ClientDashboard() {
   const todayCalories = todayEntry?.calories || 0;
   const todaySteps = todayEntry?.steps || 0;
   const todayWeight = todayEntry?.weight || null;
-  const stepBonus = Math.round(((todaySteps - (targets?.steps || 10000)) / 1000) * (targets?.kcalPer1000Steps || 20));
-  const sessionAdj = todayEntry?.didProgramSession === false ? -(targets?.sessionCalorieDeficit || 300) : 0;
-  const extraCal = todayEntry?.extraActivityCal || 0;
   const baseCalories = targets?.calories || 2000;
-  const adjustedCalories = baseCalories + (todayEntry ? stepBonus + sessionAdj + extraCal : 0);
   const caloriePct = Math.min(100, Math.round((todayCalories / baseCalories) * 100));
   const stepPct = Math.min(100, Math.round((todaySteps / (targets?.steps || 10000)) * 100));
-
   const balanceColor = weekBalance === null ? 'var(--text-muted)'
     : weekBalance > 200 ? 'var(--warning)'
     : weekBalance < -200 ? 'var(--danger)'
     : 'var(--success)';
+
+  const TABS = [
+    { key: 'today', label: "Aujourd'hui" },
+    { key: 'objectives', label: 'Mes objectifs' },
+  ];
 
   return (
     <div className="app-shell">
@@ -142,357 +127,322 @@ export default function ClientDashboard() {
       </div>
 
       <div className="page">
-        {/* Bilan hebdo banner */}
+
+        {/* Banners */}
         {weeklyToday && (
           <div style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', borderRadius: 'var(--radius)', padding: '20px', marginBottom: 16, color: 'white', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'relative', zIndex: 1 }}>
               <p style={{ fontSize: 13, opacity: 0.9, marginBottom: 6 }}>📅 C'est le jour de ton bilan !</p>
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Bilan hebdomadaire</h3>
               <Link to="/checkin/weekly" style={{ textDecoration: 'none' }}>
-                <button style={{ background: 'white', color: '#D97706', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>
-                  Faire mon bilan →
-                </button>
+                <button style={{ background: 'white', color: '#D97706', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Faire mon bilan →</button>
               </Link>
             </div>
             <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }} />
           </div>
         )}
-
-        {/* Daily check-in CTA */}
         {!todayEntry && (
           <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderRadius: 'var(--radius)', padding: '20px', marginBottom: 16, color: 'white', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'relative', zIndex: 1 }}>
               <p style={{ fontSize: 13, opacity: 0.85, marginBottom: 6 }}>📋 Pas encore rempli aujourd'hui</p>
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Suivi quotidien</h3>
               <Link to="/checkin/daily" style={{ textDecoration: 'none' }}>
-                <button style={{ background: 'white', color: 'var(--primary)', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>
-                  Remplir maintenant →
-                </button>
+                <button style={{ background: 'white', color: 'var(--primary)', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Remplir maintenant →</button>
               </Link>
             </div>
             <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, background: 'rgba(255,255,255,0.08)', borderRadius: '50%' }} />
           </div>
         )}
 
-        {/* Today stats */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h2 className="section-title" style={{ margin: 0 }}>Aujourd'hui</h2>
-          {todayEntry && <Link to="/checkin/daily" style={{ textDecoration: 'none', fontSize: 13, color: 'var(--primary)', fontWeight: 600 }}>Modifier ✏️</Link>}
-        </div>
-
-        <div className="stat-grid" style={{ marginBottom: 20 }}>
-          {/* Calories + balance : mode tracking uniquement */}
-          {(profile.coachingMode || 'tracking') !== 'intuitif' && (
-            <div className="stat-card">
-              <div className="stat-label">Calories</div>
-              <div className="stat-value">{todayCalories.toLocaleString()}<span className="stat-unit">/ {baseCalories.toLocaleString()}</span></div>
-              <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${caloriePct}%` }} /></div>
-            </div>
-          )}
-          <div className="stat-card">
-            <div className="stat-label">Pas</div>
-            <div className="stat-value">{todaySteps.toLocaleString()}<span className="stat-unit">/ {(targets?.steps || 10000).toLocaleString()}</span></div>
-            <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${stepPct}%` }} /></div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Poids du jour</div>
-            <div className="stat-value" style={{ color: 'var(--primary)' }}>{todayWeight || '—'}<span className="stat-unit">kg</span></div>
-          </div>
-          {(profile.coachingMode || 'tracking') !== 'intuitif' && weekBalance !== null && (
-            <div className="stat-card" style={{ border: '1.5px solid ' + balanceColor + '20' }}>
-              <div className="stat-label">Balance semaine</div>
-              <div className="stat-value" style={{ color: balanceColor, fontSize: 20 }}>
-                {weekBalance > 0 ? '+' : ''}{weekBalance}
-                <span className="stat-unit">kcal</span>
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
-                {weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── MES OBJECTIFS ── */}
-        <h2 className="section-title">Mes objectifs</h2>
-        <div className="card" style={{ marginBottom: 20 }}>
-          {[
-            ...(profile.coachingMode !== 'intuitif' ? [
-              { icon: '🔥', label: 'Calories cibles', value: `${targets?.calories || '—'} kcal`, color: 'var(--primary)' },
-              { icon: '🥩', label: 'Protéines', value: `${targets?.protein || '—'} g`, color: '#F59E0B' },
-              { icon: '🌾', label: 'Glucides', value: `${targets?.carbs || '—'} g`, color: '#EC4899' },
-              { icon: '🥑', label: 'Lipides', value: `${targets?.fat || '—'} g`, color: '#7C3AED' },
-            ] : []),
-            { icon: '👟', label: 'Pas / jour', value: (targets?.steps || 10000).toLocaleString(), color: 'var(--success)' },
-            { icon: '🏋️', label: 'Séances / semaine', value: targets?.sessionsPerWeek || 3, color: 'var(--primary)' },
-          ].map(t => (
-            <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
-              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t.icon} {t.label}</span>
-              <span style={{ fontWeight: 700, color: t.color }}>{t.value}</span>
-            </div>
+        {/* Onglets */}
+        <div style={{ display: 'flex', borderBottom: '2px solid var(--border-light)', marginBottom: 20 }}>
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+              flex: 1, padding: '10px 0', border: 'none', background: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: activeTab === t.key ? 700 : 400,
+              color: activeTab === t.key ? 'var(--primary)' : 'var(--text-muted)',
+              borderBottom: activeTab === t.key ? '2px solid var(--primary)' : '2px solid transparent',
+              marginBottom: -2, transition: 'all 0.15s',
+            }}>{t.label}</button>
           ))}
         </div>
 
-        {/* ── REPÈRE DE L'ASSIETTE ── */}
-        {(
-          <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>L'ASSIETTE TYPE</div>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-              <svg width="180" height="180" viewBox="0 0 180 180">
-                <circle cx="90" cy="90" r="88" fill="#fafaf8" stroke="#ccc9c0" strokeWidth="5"/>
-                <circle cx="90" cy="90" r="80" fill="#fafaf8" stroke="#e8e3dc" strokeWidth="1"/>
-                <path d="M90,90 L90,10 A80,80 0 0,1 90,170 Z" fill="#82C97E"/>
-                <path d="M90,90 L90,170 A80,80 0 0,1 10,90 Z" fill="#E8C56A"/>
-                <path d="M90,90 L10,90 A80,80 0 0,1 90,10 Z" fill="#E8906A"/>
-                <circle cx="90" cy="90" r="22" fill="#9B8FD4" stroke="#fafaf8" strokeWidth="2"/>
-                <text x="90" y="90" textAnchor="middle" dominantBaseline="central" fontSize="18">🥑</text>
-                <text x="133" y="90" textAnchor="middle" dominantBaseline="central" fontSize="22">🥦</text>
-                <text x="57" y="133" textAnchor="middle" dominantBaseline="central" fontSize="22">🌾</text>
-                <text x="57" y="47" textAnchor="middle" dominantBaseline="central" fontSize="22">🥩</text>
-              </svg>
+        {/* ══════════ ONGLET AUJOURD'HUI ══════════ */}
+        {activeTab === 'today' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 className="section-title" style={{ margin: 0 }}>Aujourd'hui</h2>
+              {todayEntry && <Link to="/checkin/daily" style={{ textDecoration: 'none', fontSize: 13, color: 'var(--primary)', fontWeight: 600 }}>Modifier ✏️</Link>}
             </div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 8 }}>LÉGENDE</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+
+            <div className="stat-grid" style={{ marginBottom: 20 }}>
+              {(profile.coachingMode || 'tracking') !== 'intuitif' && (
+                <div className="stat-card">
+                  <div className="stat-label">Calories</div>
+                  <div className="stat-value">{todayCalories.toLocaleString()}<span className="stat-unit">/ {baseCalories.toLocaleString()}</span></div>
+                  <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${caloriePct}%` }} /></div>
+                </div>
+              )}
+              <div className="stat-card">
+                <div className="stat-label">Pas</div>
+                <div className="stat-value">{todaySteps.toLocaleString()}<span className="stat-unit">/ {(targets?.steps || 10000).toLocaleString()}</span></div>
+                <div className="progress-bar" style={{ marginTop: 8 }}><div className="progress-fill" style={{ width: `${stepPct}%` }} /></div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Poids du jour</div>
+                <div className="stat-value" style={{ color: 'var(--primary)' }}>{todayWeight || '—'}<span className="stat-unit">kg</span></div>
+              </div>
+              {(profile.coachingMode || 'tracking') !== 'intuitif' && weekBalance !== null && (
+                <div className="stat-card" style={{ border: '1.5px solid ' + balanceColor + '20' }}>
+                  <div className="stat-label">Balance semaine</div>
+                  <div className="stat-value" style={{ color: balanceColor, fontSize: 20 }}>
+                    {weekBalance > 0 ? '+' : ''}{weekBalance}<span className="stat-unit">kcal</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
+                    {weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Objectifs de la semaine */}
+            {weekGoals?.goals?.some(g => g.active) && (
+              <>
+                <h2 className="section-title">Objectifs de la semaine</h2>
+                <div className="card" style={{ marginBottom: 20 }}>
+                  {weekGoals.goals.filter(g => g.active).map((goal, i, arr) => {
+                    let label = '', status = '';
+                    if (goal.key === 'protein') {
+                      const meals = ['morning', 'lunch', 'dinner'];
+                      if (goal.includeSnack) meals.push('snack');
+                      const done = meals.filter(m => todayGoalChecks?.protein?.[m]).length;
+                      label = '🥩 Protéines ≥ 30g';
+                      status = `${done}/${meals.length} repas`;
+                    } else if (goal.key === 'vegetables') {
+                      const done = ['lunch','dinner'].filter(m => todayGoalChecks?.vegetables?.[m]).length;
+                      label = '🥦 Légumes ≥ 250g';
+                      status = `${done}/2 repas`;
+                    } else if (goal.key === 'fruits') {
+                      label = '🍎 2 fruits min.';
+                      status = todayGoalChecks?.fruits?.done ? 'Atteint ✅' : 'Pas encore';
+                    } else if (goal.key === 'junkfood') {
+                      const cal = todayGoalChecks?.junkfood?.calories;
+                      label = `🍕 Malbouffe (max ${goal.maxCalories || 300} kcal)`;
+                      status = cal ? `${cal} kcal` : 'Non renseigné';
+                    }
+                    return (
+                      <div key={goal.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>{status}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ marginTop: 12, textAlign: 'center' }}>
+                    <a href="/checkin/daily" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>✏️ Compléter mon suivi du jour →</a>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Mes progrès */}
+            {(profile.startWeight || profile.startMeasurements) && (
+              <>
+                <h2 className="section-title">Mes progrès</h2>
+                <div className="card" style={{ marginBottom: 20 }}>
+                  {profile.startWeight && (() => {
+                    const currentW = todayWeight || lastWeeklyEntry?.avgWeight || null;
+                    const deltaW = currentW ? +(currentW - profile.startWeight).toFixed(1) : null;
+                    return (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border-light)' }}>
+                        <div><span style={{ fontSize: 14, fontWeight: 600 }}>⚖️ Poids</span><span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {profile.startWeight} kg</span></div>
+                        {deltaW !== null ? <span style={{ fontWeight: 800, fontSize: 16, color: deltaW < 0 ? 'var(--success)' : deltaW > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{deltaW > 0 ? '+' : ''}{deltaW} kg</span> : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>—</span>}
+                      </div>
+                    );
+                  })()}
+                  {profile.startMeasurements && lastWeeklyEntry?.measurements && [
+                    { key: 'waist', label: 'Taille', emoji: '👗' },
+                    { key: 'hips', label: 'Hanches', emoji: '🔵' },
+                    { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+                    { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+                    { key: 'arms', label: 'Bras', emoji: '💪' },
+                  ].map((m, i, arr) => {
+                    const startVal = profile.startMeasurements[m.key];
+                    const currentVal = lastWeeklyEntry.measurements[m.key];
+                    if (!startVal || !currentVal) return null;
+                    const delta = +(currentVal - startVal).toFixed(1);
+                    return (
+                      <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                        <div><span style={{ fontSize: 14, fontWeight: 600 }}>{m.emoji} {m.label}</span><span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {startVal} cm</span></div>
+                        <span style={{ fontWeight: 800, fontSize: 16, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{delta > 0 ? '+' : ''}{delta} cm</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Évolution du poids */}
+            {recentEntries.filter(e => e.weight).length > 1 && (
+              <>
+                <h2 className="section-title">Évolution du poids</h2>
+                <div className="card" style={{ marginBottom: 20, padding: '16px 8px 8px' }}>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <LineChart data={recentEntries.filter(e => e.weight)}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+                      <XAxis dataKey="date" tickFormatter={d => format(new Date(d), 'dd/MM', { locale: fr })} tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                      <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} width={35} />
+                      <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: 'var(--primary)' }} />
+                      <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={v => [`${v} kg`, 'Poids']} labelFormatter={d => format(new Date(d), 'dd/MM/yyyy', { locale: fr })} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )}
+
+            {/* Journal */}
+            {allEntries.length > 0 && (
+              <>
+                <h2 className="section-title">Mon journal</h2>
+                <div className="card" style={{ marginBottom: 20 }}>
+                  {allEntries.slice(0, journalLimit).map((entry, i) => (
+                    <div key={entry.date} style={{ padding: '12px 0', borderBottom: i < Math.min(journalLimit, allEntries.length) - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>
+                          {new Date(entry.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {entry.menstruation && <span title="Règles">🩸</span>}
+                          {entry.didProgramSession === true && <span style={{ fontSize: 11, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>🏋️ Séance</span>}
+                          {entry.didProgramSession === false && <span style={{ fontSize: 11, background: 'var(--danger-light)', color: 'var(--danger)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>❌ Séance</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        {entry.weight && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>⚖️ <strong>{entry.weight} kg</strong></span>}
+                        {entry.steps > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>👟 <strong>{(+entry.steps).toLocaleString()}</strong> pas</span>}
+                        {profile.coachingMode !== 'intuitif' && entry.calories > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🔥 <strong>{entry.calories}</strong> kcal</span>}
+                        {entry.sleep && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>😴 <strong>{entry.sleep}h</strong></span>}
+                        {entry.extraActivity && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏃 {entry.extraActivity}</span>}
+                      </div>
+                      {profile.coachingMode !== 'intuitif' && (entry.protein > 0 || entry.carbs > 0 || entry.fat > 0) && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+                          {entry.protein > 0 && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#FEF3C7', color: '#92400E', fontWeight: 600 }}>🥩 {entry.protein}g{profile.targets?.protein > 0 ? ` / ${profile.targets.protein}g` : ''}</span>}
+                          {entry.carbs > 0 && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#EFF6FF', color: '#1D4ED8', fontWeight: 600 }}>🌾 {entry.carbs}g{profile.targets?.carbs > 0 ? ` / ${profile.targets.carbs}g` : ''}</span>}
+                          {entry.fat > 0 && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#F0FDF4', color: '#15803D', fontWeight: 600 }}>🥑 {entry.fat}g{profile.targets?.fat > 0 ? ` / ${profile.targets.fat}g` : ''}</span>}
+                        </div>
+                      )}
+                      {entry.goalChecks && Object.keys(entry.goalChecks).length > 0 && (
+                        <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
+                          {entry.goalChecks.protein && ['morning','lunch','dinner','snack'].map(m => entry.goalChecks.protein[m] && (
+                            <span key={m} style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>
+                              🥩 {m === 'morning' ? 'Matin' : m === 'lunch' ? 'Midi' : m === 'dinner' ? 'Soir' : 'Collation'}
+                            </span>
+                          ))}
+                          {entry.goalChecks.vegetables?.lunch && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Midi</span>}
+                          {entry.goalChecks.vegetables?.dinner && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Soir</span>}
+                          {entry.goalChecks.fruits?.done && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🍎 Fruits ✅</span>}
+                        </div>
+                      )}
+                      {entry.notes && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>"{entry.notes}"</p>}
+                    </div>
+                  ))}
+                  {allEntries.length > journalLimit && (
+                    <button onClick={() => setJournalLimit(l => l + 14)} style={{ width: '100%', padding: '12px', marginTop: 8, background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+                      Voir plus ({allEntries.length - journalLimit} entrées) ↓
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            <button className="btn btn-ghost" onClick={async () => { await logout(); navigate('/login'); }} style={{ marginBottom: 16 }}>
+              Se déconnecter
+            </button>
+          </>
+        )}
+
+        {/* ══════════ ONGLET MES OBJECTIFS ══════════ */}
+        {activeTab === 'objectives' && (
+          <>
+            {/* Calories & macros */}
+            <h2 className="section-title">Mes objectifs</h2>
+            <div className="card" style={{ marginBottom: 20 }}>
               {[
-                { color: '#E8906A', emoji: '🥩', label: 'Protéines', part: "¼ de l'assiette" },
-                { color: '#82C97E', emoji: '🥦', label: 'Légumes', part: "½ de l'assiette" },
-                { color: '#E8C56A', emoji: '🌾', label: 'Glucides', part: "¼ de l'assiette" },
-                { color: '#9B8FD4', emoji: '🥑', label: 'Lipides', part: 'petite quantité' },
-              ].map(item => (
-                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 6, background: item.color, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{item.emoji}</div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.part}</div>
-                  </div>
+                ...(profile.coachingMode !== 'intuitif' ? [
+                  { icon: '🔥', label: 'Calories cibles', value: `${targets?.calories || '—'} kcal`, color: 'var(--primary)' },
+                  { icon: '🥩', label: 'Protéines', value: `${targets?.protein || '—'} g`, color: '#F59E0B' },
+                  { icon: '🌾', label: 'Glucides', value: `${targets?.carbs || '—'} g`, color: '#EC4899' },
+                  { icon: '🥑', label: 'Lipides', value: `${targets?.fat || '—'} g`, color: '#7C3AED' },
+                ] : []),
+                { icon: '👟', label: 'Pas / jour', value: (targets?.steps || 10000).toLocaleString(), color: 'var(--success)' },
+                { icon: '🏋️', label: 'Séances / semaine', value: targets?.sessionsPerWeek || 3, color: 'var(--primary)' },
+              ].map(t => (
+                <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+                  <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t.icon} {t.label}</span>
+                  <span style={{ fontWeight: 700, color: t.color }}>{t.value}</span>
                 </div>
               ))}
             </div>
-          </div>
-        )}
 
-        {/* Répartition chiffrée — tracking uniquement */}
-        {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>RÉPARTITION CONSEILLÉE POUR TOI</div>
-            {[
-              { label: '🌅 Matin', r: 0.25 },
-              { label: '☀️ Midi', r: 0.35 },
-              { label: '🌙 Soir', r: 0.30 },
-              { label: '🍎 Collation', r: 0.10 },
-            ].map(m => (
-              <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginBottom: 6, border: '1px solid var(--border-light)', borderRadius: 10, background: 'var(--bg)' }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{m.label}</span>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>~{Math.round(targets.calories * m.r)} kcal</span>
-                  {targets.protein > 0 && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#E8906A' }}>{Math.round(targets.protein * m.r)}g protéines</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── OBJECTIFS DE LA SEMAINE ── */}
-        {weekGoals?.goals?.some(g => g.active) && (
-          <>
-            <h2 className="section-title">Objectifs de la semaine</h2>
-            <div className="card" style={{ marginBottom: 20 }}>
-              {weekGoals.goals.filter(g => g.active).map((goal, i, arr) => {
-                let checks = [];
-                let label = '';
-                if (goal.key === 'protein') {
-                  const meals = ['morning', 'lunch', 'dinner'];
-                  if (goal.includeSnack) meals.push('snack');
-                  const done = meals.filter(m => todayGoalChecks?.protein?.[m]).length;
-                  checks = [{ label: `${done}/${meals.length} repas`, done: done === meals.length }];
-                  label = '🥩 Protéines ≥ 30g';
-                } else if (goal.key === 'vegetables') {
-                  const done = ['lunch','dinner'].filter(m => todayGoalChecks?.vegetables?.[m]).length;
-                  checks = [{ label: `${done}/2 repas`, done: done === 2 }];
-                  label = '🥦 Légumes ≥ 250g';
-                } else if (goal.key === 'fruits') {
-                  const done = !!todayGoalChecks?.fruits?.done;
-                  checks = [{ label: done ? 'Atteint ✅' : 'Pas encore', done }];
-                  label = '🍎 2 fruits min.';
-                } else if (goal.key === 'junkfood') {
-                  const cal = todayGoalChecks?.junkfood?.calories;
-                  const ok = cal ? +cal <= (goal.maxCalories || 300) : null;
-                  checks = [{ label: cal ? `${cal} kcal${ok ? ' ✅' : ' ⚠️'}` : 'Non renseigné', done: ok }];
-                  label = `🍕 Malbouffe (max ${goal.maxCalories || 300} kcal)`;
-                }
-                return (
-                  <div key={goal.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: checks[0]?.done ? 'var(--success)' : 'var(--text-muted)' }}>{checks[0]?.label}</span>
+            {/* Répartition conseillée */}
+            {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>RÉPARTITION CONSEILLÉE POUR TOI</div>
+                {[
+                  { label: '🌅 Matin', r: 0.25 },
+                  { label: '☀️ Midi', r: 0.35 },
+                  { label: '🌙 Soir', r: 0.30 },
+                  { label: '🍎 Collation', r: 0.10 },
+                ].map(m => (
+                  <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginBottom: 6, border: '1px solid var(--border-light)', borderRadius: 10, background: 'var(--bg)' }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>{m.label}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: 14, fontWeight: 700 }}>~{Math.round(targets.calories * m.r)} kcal</span>
+                      {targets.protein > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: '#E8906A' }}>{Math.round(targets.protein * m.r)}g protéines</div>}
+                    </div>
                   </div>
-                );
-              })}
-              <div style={{ marginTop: 12, textAlign: 'center' }}>
-                <a href="/checkin/daily" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
-                  ✏️ Compléter mon suivi du jour →
-                </a>
+                ))}
+              </div>
+            )}
+
+            {/* Assiette type */}
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>L'ASSIETTE TYPE</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                <svg width="180" height="180" viewBox="0 0 180 180">
+                  <circle cx="90" cy="90" r="88" fill="#fafaf8" stroke="#ccc9c0" strokeWidth="5"/>
+                  <circle cx="90" cy="90" r="80" fill="#fafaf8" stroke="#e8e3dc" strokeWidth="1"/>
+                  <path d="M90,90 L90,10 A80,80 0 0,1 90,170 Z" fill="#82C97E"/>
+                  <path d="M90,90 L90,170 A80,80 0 0,1 10,90 Z" fill="#E8C56A"/>
+                  <path d="M90,90 L10,90 A80,80 0 0,1 90,10 Z" fill="#E8906A"/>
+                  <circle cx="90" cy="90" r="22" fill="#9B8FD4" stroke="#fafaf8" strokeWidth="2"/>
+                  <text x="90" y="90" textAnchor="middle" dominantBaseline="central" fontSize="18">🥑</text>
+                  <text x="133" y="90" textAnchor="middle" dominantBaseline="central" fontSize="22">🥦</text>
+                  <text x="57" y="133" textAnchor="middle" dominantBaseline="central" fontSize="22">🌾</text>
+                  <text x="57" y="47" textAnchor="middle" dominantBaseline="central" fontSize="22">🥩</text>
+                </svg>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 8 }}>LÉGENDE</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { color: '#E8906A', emoji: '🥩', label: 'Protéines', part: "¼ de l'assiette" },
+                  { color: '#82C97E', emoji: '🥦', label: 'Légumes', part: "½ de l'assiette" },
+                  { color: '#E8C56A', emoji: '🌾', label: 'Glucides', part: "¼ de l'assiette" },
+                  { color: '#9B8FD4', emoji: '🥑', label: 'Lipides', part: 'petite quantité' },
+                ].map(item => (
+                  <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 6, background: item.color, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{item.emoji}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.part}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </>
         )}
-        {/* Bloc Mes progrès */}
-        {(profile.startWeight || profile.startMeasurements) && (
-          <>
-            <h2 className="section-title">Mes progrès</h2>
-            <div className="card" style={{ marginBottom: 20 }}>
-              {/* Poids */}
-              {profile.startWeight && (() => {
-                const currentW = todayWeight || lastWeeklyEntry?.avgWeight || null;
-                const deltaW = currentW ? +(currentW - profile.startWeight).toFixed(1) : null;
-                return (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border-light)' }}>
-                    <div>
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>⚖️ Poids</span>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {profile.startWeight} kg</span>
-                    </div>
-                    {deltaW !== null ? (
-                      <span style={{ fontWeight: 800, fontSize: 16, color: deltaW < 0 ? 'var(--success)' : deltaW > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                        {deltaW > 0 ? '+' : ''}{deltaW} kg
-                      </span>
-                    ) : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>—</span>}
-                  </div>
-                );
-              })()}
-              {/* Mensurations */}
-              {profile.startMeasurements && lastWeeklyEntry?.measurements && [
-                { key: 'waist', label: 'Taille', emoji: '👗' },
-                { key: 'hips', label: 'Hanches', emoji: '🔵' },
-                { key: 'glutes', label: 'Fesses', emoji: '🍑' },
-                { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
-                { key: 'arms', label: 'Bras', emoji: '💪' },
-              ].map((m, i, arr) => {
-                const startVal = profile.startMeasurements[m.key];
-                const currentVal = lastWeeklyEntry.measurements[m.key];
-                if (!startVal || !currentVal) return null;
-                const delta = +(currentVal - startVal).toFixed(1);
-                return (
-                  <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                    <div>
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>{m.emoji} {m.label}</span>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>départ : {startVal} cm</span>
-                    </div>
-                    <span style={{ fontWeight: 800, fontSize: 16, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                      {delta > 0 ? '+' : ''}{delta} cm
-                    </span>
-                  </div>
-                );
-              })}
-              {(!lastWeeklyEntry?.measurements || !profile.startMeasurements) && (
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
-                  Remplis ton premier bilan hebdo pour voir tes progrès 📊
-                </p>
-              )}
-            </div>
-          </>
-        )}
 
-        {/* Weight chart */}
-        {recentEntries.filter(e => e.weight).length > 1 && (
-          <>
-            <h2 className="section-title">Évolution du poids</h2>
-            <div className="card" style={{ marginBottom: 20, padding: '16px 8px 8px' }}>
-              <ResponsiveContainer width="100%" height={150}>
-                <LineChart data={recentEntries.filter(e => e.weight)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
-                  <XAxis dataKey="date" tickFormatter={d => format(new Date(d), 'dd/MM', { locale: fr })} tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} width={35} />
-                  <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: 'var(--primary)' }} />
-                  <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={v => [`${v} kg`, 'Poids']} labelFormatter={d => format(new Date(d), 'dd/MM/yyyy', { locale: fr })} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </>
-        )}
-
-        {/* Targets */}
-        {allEntries.length > 0 && (
-          <>
-            <h2 className="section-title">Mon journal</h2>
-            <div className="card" style={{ marginBottom: 20 }}>
-              {allEntries.slice(0, journalLimit).map((entry, i) => (
-                <div key={entry.date} style={{
-                  padding: '12px 0',
-                  borderBottom: i < Math.min(journalLimit, allEntries.length) - 1 ? '1px solid var(--border-light)' : 'none',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>
-                      {new Date(entry.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {entry.menstruation && <span title="Règles">🩸</span>}
-                      {entry.didProgramSession === true && <span style={{ fontSize: 11, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>🏋️ Séance</span>}
-                      {entry.didProgramSession === false && <span style={{ fontSize: 11, background: 'var(--danger-light)', color: 'var(--danger)', padding: '2px 7px', borderRadius: 100, fontWeight: 600 }}>❌ Séance</span>}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    {entry.weight && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>⚖️ <strong>{entry.weight} kg</strong></span>}
-                    {entry.steps > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>👟 <strong>{(+entry.steps).toLocaleString()}</strong> pas</span>}
-                    {profile.coachingMode !== 'intuitif' && entry.calories > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🔥 <strong>{entry.calories}</strong> kcal</span>}
-                    {entry.sleep && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>😴 <strong>{entry.sleep}h</strong></span>}
-                    {entry.extraActivity && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏃 {entry.extraActivity}</span>}
-                  </div>
-                  {/* Macros — mode tracking */}
-                  {profile.coachingMode !== 'intuitif' && (entry.protein > 0 || entry.carbs > 0 || entry.fat > 0) && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
-                      {entry.protein > 0 && (
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#FEF3C7', color: '#92400E', fontWeight: 600 }}>
-                          🥩 {entry.protein}g
-                          {profile.targets?.protein > 0 && <span style={{ opacity: 0.7, fontWeight: 400 }}> / {profile.targets.protein}g</span>}
-                        </span>
-                      )}
-                      {entry.carbs > 0 && (
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#EFF6FF', color: '#1D4ED8', fontWeight: 600 }}>
-                          🌾 {entry.carbs}g
-                          {profile.targets?.carbs > 0 && <span style={{ opacity: 0.7, fontWeight: 400 }}> / {profile.targets.carbs}g</span>}
-                        </span>
-                      )}
-                      {entry.fat > 0 && (
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: '#F0FDF4', color: '#15803D', fontWeight: 600 }}>
-                          🥑 {entry.fat}g
-                          {profile.targets?.fat > 0 && <span style={{ opacity: 0.7, fontWeight: 400 }}> / {profile.targets.fat}g</span>}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {/* Objectifs cochés — tous modes */}
-                  {entry.goalChecks && Object.keys(entry.goalChecks).length > 0 && (
-                    <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
-                      {entry.goalChecks.protein && ['morning','lunch','dinner','snack'].map(m => entry.goalChecks.protein[m] && (
-                        <span key={m} style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>
-                          🥩 {m === 'morning' ? 'Matin' : m === 'lunch' ? 'Midi' : m === 'dinner' ? 'Soir' : 'Collation'}
-                        </span>
-                      ))}
-                      {entry.goalChecks.vegetables?.lunch && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Midi</span>}
-                      {entry.goalChecks.vegetables?.dinner && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🥦 Soir</span>}
-                      {entry.goalChecks.fruits?.done && <span style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', padding: '2px 6px', borderRadius: 100, fontWeight: 600 }}>🍎 Fruits ✅</span>}
-                    </div>
-                  )}
-                  {entry.notes && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>"{entry.notes}"</p>}
-                </div>
-              ))}
-              {allEntries.length > journalLimit && (
-                <button onClick={() => setJournalLimit(l => l + 14)} style={{
-                  width: '100%', padding: '12px', marginTop: 8, background: 'none', border: 'none',
-                  color: 'var(--primary)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)',
-                }}>
-                  Voir plus ({allEntries.length - journalLimit} entrées) ↓
-                </button>
-              )}
-            </div>
-          </>
-        )}
-
-        <button className="btn btn-ghost" onClick={async () => { await logout(); navigate('/login'); }} style={{ marginBottom: 16 }}>
-          Se déconnecter
-        </button>
       </div>
-
       <TabBar />
     </div>
   );

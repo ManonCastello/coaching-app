@@ -200,6 +200,38 @@ export default function ClientProfile() {
           </div>
         </div>
 
+        {/* Coaching */}
+        {(profile.coachingStartDate || profile.coachingEndDate) && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>⚜️ Mon coaching</div>
+            {[
+              { label: '🗓️ Début du coaching', value: profile.coachingStartDate ? new Date(profile.coachingStartDate).toLocaleDateString('fr-FR') : '—' },
+              { label: '💳 1er paiement', value: profile.firstPaymentDate ? new Date(profile.firstPaymentDate).toLocaleDateString('fr-FR') : '—' },
+              { label: '📅 Fin du coaching', value: profile.coachingEndDate ? new Date(profile.coachingEndDate).toLocaleDateString('fr-FR') : '—' },
+              { label: '💳 Dernier paiement', value: profile.lastPaymentDate ? new Date(profile.lastPaymentDate).toLocaleDateString('fr-FR') : '—' },
+              { label: '📋 Formule', value: profile.coachingDuration === '3m' ? '3 mois' : profile.coachingDuration === '6m' ? '6 mois' : profile.coachingDuration === '1y' ? '1 an' : '—' },
+            ].map(r => (
+              <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{r.label}</span>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{r.value}</span>
+              </div>
+            ))}
+            {profile.coachingEndDate && (() => {
+              const daysLeft = Math.ceil((new Date(profile.coachingEndDate) - new Date()) / (1000 * 60 * 60 * 24));
+              const color = daysLeft <= 7 ? 'var(--danger)' : daysLeft <= 30 ? 'var(--warning)' : 'var(--success)';
+              return daysLeft > 0 ? (
+                <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: color + '15', color, fontWeight: 700, fontSize: 13, textAlign: 'center' }}>
+                  ⏳ {daysLeft} jour{daysLeft > 1 ? 's' : ''} restant{daysLeft > 1 ? 's' : ''}
+                </div>
+              ) : (
+                <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--danger-light)', color: 'var(--danger)', fontWeight: 700, fontSize: 13, textAlign: 'center' }}>
+                  ⚠️ Coaching terminé — contacte ta coach pour renouveler
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Reminder */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editReminder ? 16 : 0 }}>

@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS } from '../utils/calculations';
 import PhotoViewer from '../components/PhotoViewer';
 
@@ -40,6 +40,8 @@ export default function CoachClientDetail() {
   const [reminderHour, setReminderHour] = useState('20');
   const [reminderMin, setReminderMin] = useState('00');
   const [bilanDay, setBilanDay] = useState(1);
+  const [editCoaching, setEditCoaching] = useState(false);
+  const [coachingForm, setCoachingForm] = useState({ coachingStartDate: '', coachingEndDate: '', firstPaymentDate: '', lastPaymentDate: '', coachingDuration: '3m' });
   const [weekGoals, setWeekGoals] = useState(null);
   const [clientConsultation, setClientConsultation] = useState(null);
   const [savingGoals, setSavingGoals] = useState(false);
@@ -75,6 +77,13 @@ export default function CoachClientDetail() {
         const [h, m] = (data.reminderTime || '20:00').split(':');
         setReminderHour(h); setReminderMin(m);
         setBilanDay(data.weeklyBilanDay ?? 1);
+        setCoachingForm({
+          coachingStartDate: data.coachingStartDate || '',
+          coachingEndDate: data.coachingEndDate || '',
+          firstPaymentDate: data.firstPaymentDate || '',
+          lastPaymentDate: data.lastPaymentDate || '',
+          coachingDuration: data.coachingDuration || '3m',
+        });
       }
       const dailyQ = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(30));
       const dailySnap = await getDocs(dailyQ);
@@ -165,6 +174,33 @@ export default function CoachClientDetail() {
       window.location.reload();
     } catch(e) { console.error(e); }
     setSaving(false);
+  }
+
+  async function saveCoaching() {
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'clients', clientId), {
+        coachingStartDate: coachingForm.coachingStartDate || null,
+        coachingEndDate: coachingForm.coachingEndDate || null,
+        firstPaymentDate: coachingForm.firstPaymentDate || null,
+        lastPaymentDate: coachingForm.lastPaymentDate || null,
+        coachingDuration: coachingForm.coachingDuration,
+      });
+      setClient(p => ({ ...p, ...coachingForm }));
+      setEditCoaching(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  }
+
+  function prolongerCoaching(duree) {
+    const base = client.coachingEndDate ? new Date(client.coachingEndDate) : new Date();
+    const mois = duree === '3m' ? 3 : duree === '6m' ? 6 : 12;
+    const newEnd = new Date(base);
+    newEnd.setMonth(newEnd.getMonth() + mois);
+    const newEndStr = newEnd.toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    setCoachingForm(p => ({ ...p, coachingEndDate: newEndStr, lastPaymentDate: today, coachingDuration: duree }));
+    setEditCoaching(true);
   }
 
   async function resetWeekBalance() {
@@ -562,8 +598,76 @@ export default function CoachClientDetail() {
 
             {/* Données de départ */}
             <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editStartData ? 16 : 8 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>📐 Mesures de départ</div>
+              {/* ── COACHING ── */}
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>⚜️ Suivi du coaching</div>
+                  <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditCoaching(!editCoaching)}>
+                    {editCoaching ? 'Annuler' : 'Modifier'}
+                  </button>
+                </div>
+                {!editCoaching && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                      {[
+                        { label: '🗓️ Début', value: client.coachingStartDate ? new Date(client.coachingStartDate).toLocaleDateString('fr-FR') : '—' },
+                        { label: '💳 1er paiement', value: client.firstPaymentDate ? new Date(client.firstPaymentDate).toLocaleDateString('fr-FR') : '—' },
+                        { label: '📅 Fin', value: client.coachingEndDate ? new Date(client.coachingEndDate).toLocaleDateString('fr-FR') : '—' },
+                        { label: '💳 Dernier paiement', value: client.lastPaymentDate ? new Date(client.lastPaymentDate).toLocaleDateString('fr-FR') : '—' },
+                        { label: '📋 Formule', value: client.coachingDuration === '3m' ? '3 mois' : client.coachingDuration === '6m' ? '6 mois' : client.coachingDuration === '1y' ? '1 an' : '—' },
+                      ].map(r => (
+                        <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>
+                          <span style={{ fontWeight: 600 }}>{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {client.coachingEndDate && (() => {
+                      const daysLeft = Math.ceil((new Date(client.coachingEndDate) - new Date()) / (1000 * 60 * 60 * 24));
+                      const color = daysLeft <= 7 ? 'var(--danger)' : daysLeft <= 30 ? 'var(--warning)' : 'var(--success)';
+                      return (
+                        <div style={{ padding: '6px 10px', borderRadius: 8, background: color + '18', color, fontWeight: 700, fontSize: 12, textAlign: 'center', marginBottom: 10 }}>
+                          {daysLeft > 0 ? `⏳ ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}` : '⚠️ Coaching expiré'}
+                        </div>
+                      );
+                    })()}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Prolonger</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[{ k: '3m', l: '3 mois' }, { k: '6m', l: '6 mois' }, { k: '1y', l: '1 an' }].map(d => (
+                        <button key={d.k} className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => prolongerCoaching(d.k)}>{d.l}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {editCoaching && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {[
+                      { key: 'coachingStartDate', label: '🗓️ Début du coaching' },
+                      { key: 'firstPaymentDate', label: '💳 1er paiement' },
+                      { key: 'coachingEndDate', label: '📅 Fin du coaching' },
+                      { key: 'lastPaymentDate', label: '💳 Dernier paiement' },
+                    ].map(f => (
+                      <div key={f.key} className="input-group">
+                        <label className="input-label" style={{ fontSize: 11 }}>{f.label}</label>
+                        <input className="input" type="date" value={coachingForm[f.key]} onChange={e => setCoachingForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                      </div>
+                    ))}
+                    <div className="input-group">
+                      <label className="input-label" style={{ fontSize: 11 }}>📋 Formule</label>
+                      <select className="input" value={coachingForm.coachingDuration} onChange={e => setCoachingForm(p => ({ ...p, coachingDuration: e.target.value }))}>
+                        <option value="3m">3 mois</option>
+                        <option value="6m">6 mois</option>
+                        <option value="1y">1 an</option>
+                      </select>
+                    </div>
+                    <button className="btn btn-primary" onClick={saveCoaching} disabled={saving}>
+                      {saving ? 'Enregistrement...' : '✅ Enregistrer'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── MESURES DE DÉPART ── */}
                 <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditStartData(!editStartData)}>
                   {editStartData ? 'Annuler' : client.startMeasurements ? 'Modifier' : '+ Ajouter'}
                 </button>
@@ -858,22 +962,7 @@ export default function CoachClientDetail() {
                 </div>
               </div>
             )}
-            {[...weeklyEntries].reverse().map(w => {
-              // Calculer les stats nutritionnelles pour les 7 jours de ce bilan
-              const wStart7 = w.weekStart;
-              const wEnd = format(new Date(new Date(w.weekStart).getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
-              const wDays = entries.filter(e => e.date >= wStart7 && e.date <= wEnd && (e.calories || e.protein));
-              const wDaysChart = wDays.map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0 }));
-              const avg = (key) => wDays.length ? Math.round(wDays.reduce((s, e) => s + (e[key] || 0), 0) / wDays.length) : null;
-              const wStats = wDays.length > 0 ? {
-                count: wDays.length,
-                avgCalories: avg('calories'),
-                avgProtein: avg('protein'),
-                avgCarbs: avg('carbs'),
-                avgFat: avg('fat'),
-              } : null;
-
-              return (
+            {[...weeklyEntries].reverse().map(w => (
               <div key={w.weekStart} className="card">
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
                   Semaine du {format(new Date(w.weekStart), 'd MMM', { locale: fr })}
@@ -926,59 +1015,8 @@ export default function CoachClientDetail() {
                     </div>
                   </div>
                 )}
-
-                {/* Résumé nutritionnel de la semaine */}
-                {wStats && client.coachingMode !== 'intuitif' && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 10 }}>📊 Résumé nutritionnel · {wStats.count} jour{wStats.count > 1 ? 's' : ''}</div>
-
-                    {/* Graphique barres */}
-                    <ResponsiveContainer width="100%" height={130}>
-                      <BarChart data={wDaysChart} barSize={18}>
-                        <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} width={30} />
-                        <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} formatter={(v) => [`${v} kcal`, 'Calories']} />
-                        <Bar dataKey="calories" radius={[4,4,0,0]}>
-                          {wDaysChart.map((d, i) => (
-                            <Cell key={i} fill={d.calories >= (client.targets?.calories || 2000) * 0.9 ? '#7C3AED' : '#C4B5FD'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {[
-                        { label: '🔥 Calories moy.', avg: wStats.avgCalories, target: client.targets?.calories, unit: 'kcal', color: 'var(--primary)' },
-                        { label: '🥩 Protéines moy.', avg: wStats.avgProtein, target: client.targets?.protein, unit: 'g', color: '#F59E0B' },
-                        { label: '🌾 Glucides moy.', avg: wStats.avgCarbs, target: client.targets?.carbs, unit: 'g', color: '#EC4899' },
-                        { label: '🥑 Lipides moy.', avg: wStats.avgFat, target: client.targets?.fat, unit: 'g', color: '#7C3AED' },
-                      ].map(m => {
-                        const pct = m.target ? Math.round((m.avg / m.target) * 100) : null;
-                        const ok = pct && pct >= 85 && pct <= 115;
-                        return (
-                          <div key={m.label}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 12 }}>
-                              <span style={{ color: 'var(--text-muted)' }}>{m.label}</span>
-                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                <span style={{ fontWeight: 700, color: m.color }}>{m.avg} {m.unit}</span>
-                                {pct && <span style={{ fontSize: 10, fontWeight: 700, color: ok ? 'var(--success)' : pct < 85 ? 'var(--danger)' : 'var(--warning)' }}>
-                                  {pct > 100 ? '+' : ''}{pct - 100}% vs obj.
-                                </span>}
-                              </div>
-                            </div>
-                            {m.target && (
-                              <div className="progress-bar" style={{ height: 4 }}>
-                                <div style={{ height: '100%', borderRadius: 100, background: m.color, width: `${Math.min(100, pct)}%`, opacity: 0.7 }} />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
-            );
-          })}
+            ))}
           </div>
         )}
 

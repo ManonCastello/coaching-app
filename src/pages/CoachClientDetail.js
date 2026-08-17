@@ -701,7 +701,6 @@ export default function CoachClientDetail() {
                 </div>
               )}
             </div>
-
             {/* ── COACHING ── */}
             <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -935,8 +934,10 @@ export default function CoachClientDetail() {
               </>
             )}
           </>
-        )}
 
+
+
+        )}
         {/* JOURNAL */}
         {activeTab === 'journal' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

@@ -668,10 +668,13 @@ export default function CoachClientDetail() {
               </div>
 
               {/* ── MESURES DE DÉPART ── */}
-                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditStartData(!editStartData)}>
-                  {editStartData ? 'Annuler' : client.startMeasurements ? 'Modifier' : '+ Ajouter'}
-                </button>
-              </div>
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editStartData ? 16 : 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>📐 Mesures de départ</div>
+                  <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditStartData(!editStartData)}>
+                    {editStartData ? 'Annuler' : client.startMeasurements ? 'Modifier' : '+ Ajouter'}
+                  </button>
+                </div>
               {!editStartData && (
                 <>
                   {/* Progression poids */}

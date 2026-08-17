@@ -122,6 +122,7 @@ export default function DailyCheckIn({ coachMode }) {
 
   async function handleLock() {
     if (!window.confirm('Valider définitivement cette journée ? Les valeurs seront figées.')) return;
+    const dateToLock = targetDate; // figer la date au moment du clic
     const t = profile?.targets || {};
     const calories = form.calories ? +form.calories : 0;
     const steps = form.steps ? +form.steps : 0;
@@ -131,7 +132,7 @@ export default function DailyCheckIn({ coachMode }) {
     const dailyTarget = (t.calories || 2000) + stepBonus + extraActivityCal + sessionDef;
     const carryOver = weekBalance || 0;
     const dailyBalance = calories > 0 ? (calories - dailyTarget) + carryOver : null;
-    await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate), {
+    await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', dateToLock), {
       locked: true,
       dailyTarget,
       dailyBalance,
@@ -145,6 +146,7 @@ export default function DailyCheckIn({ coachMode }) {
       alert('Cette journée est validée. Contacte ta coach pour la déverrouiller.');
       return;
     }
+    const dateToSave = targetDate; // figer la date au moment du clic
     setSaving(true);
     try {
       const t = profile?.targets || {};
@@ -157,8 +159,8 @@ export default function DailyCheckIn({ coachMode }) {
       const carryOver = weekBalance || 0;
       const dailyBalance = calories > 0 ? (calories - dailyTarget) + carryOver : null;
 
-      await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate), {
-        date: targetDate,
+      await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', dateToSave), {
+        date: dateToSave,
         weight: form.weight ? +form.weight : null,
         steps,
         calories,
@@ -178,11 +180,12 @@ export default function DailyCheckIn({ coachMode }) {
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setSaved(true);
-      setTimeout(() => {
-        if (coachMode) navigate('/coach');
-        else navigate('/dashboard');
-      }, 1200);
-    } catch(e) { console.error(e); }
+      setTimeout(() => setSaved(false), 3000);
+      // On reste sur la page pour permettre le verrouillage
+    } catch(e) {
+      console.error(e);
+      alert('Erreur lors de l\'enregistrement. Vérifie ta connexion.');
+    }
     setSaving(false);
   }
 
@@ -273,7 +276,21 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
-        {saved && <div className="alert alert-success">✅ Suivi enregistré !</div>}
+        {saved && (
+          <div className="alert alert-success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>✅ Suivi enregistré !</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {!isLocked && (
+                <button onClick={handleLock} style={{ background: 'var(--success)', color: 'white', border: 'none', borderRadius: 8, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  🔒 Valider
+                </button>
+              )}
+              <button onClick={() => coachMode ? navigate('/coach') : navigate('/dashboard')} style={{ background: 'none', border: '1.5px solid var(--success)', color: 'var(--success)', borderRadius: 8, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                Retour
+              </button>
+            </div>
+          </div>
+        )}
         {existing && !saved && !isLocked && (
           <div style={{ background: 'var(--primary-bg)', border: '1px solid var(--primary-light)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--primary)' }}>
             ✏️ Données existantes — tu peux les modifier.

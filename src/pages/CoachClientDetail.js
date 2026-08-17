@@ -28,6 +28,8 @@ export default function CoachClientDetail() {
   const [editInfo, setEditInfo] = useState(false);
   const [editNotes, setEditNotes] = useState(false);
   const [notesForm, setNotesForm] = useState('');
+  const [editBalance, setEditBalance] = useState(false);
+  const [balanceInput, setBalanceInput] = useState('');
   const [infoForm, setInfoForm] = useState({});
   function setI(key, val) { setInfoForm(p => ({ ...p, [key]: val })); }
   // Données de départ
@@ -391,8 +393,6 @@ export default function CoachClientDetail() {
   const prevEntries = [...entries].sort((a,b) => b.date.localeCompare(a.date)).filter(e => e.date !== todayStr);
   const lastLocked = prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
   const coachWeekBalance = lastLocked ? Math.round(lastLocked.dailyBalance) : 0;
-  const [editBalance, setEditBalance] = useState(false);
-  const [balanceInput, setBalanceInput] = useState('');
 
   const tabs = [
     { key: 'overview', label: '📊 Vue' },

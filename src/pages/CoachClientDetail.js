@@ -680,47 +680,6 @@ export default function CoachClientDetail() {
               )}
             </div>
 
-            {weights.length > 1 && (
-              <div className="card" style={{ marginBottom: 20, padding: '16px 8px 8px' }}>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, paddingLeft: 8 }}>📉 Évolution du poids</div>
-                <ResponsiveContainer width="100%" height={130}>
-                  <LineChart data={weights}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                    <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} width={35} />
-                    <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                    <Tooltip contentStyle={{ background: 'white', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} formatter={v => [`${v} kg`]} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {latestWeekly?.measurements && (
-              <div className="card" style={{ marginBottom: 20 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📏 Dernières mensurations</div>
-                {[
-                  { key: 'waist', label: 'Taille', emoji: '👗' },
-                  { key: 'hips', label: 'Hanches', emoji: '🔵' },
-                  { key: 'glutes', label: 'Fesses', emoji: '🍑' },
-                  { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
-                  { key: 'arms', label: 'Bras', emoji: '💪' },
-                ].map(m => {
-                  const current = latestWeekly.measurements[m.key];
-                  const prev = weeklyEntries.length >= 2 ? weeklyEntries[weeklyEntries.length - 2]?.measurements?.[m.key] : null;
-                  const delta = current && prev ? Math.round((current - prev) * 10) / 10 : null;
-                  return current ? (
-                    <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
-                      <span style={{ fontSize: 13 }}>{m.emoji} {m.label}</span>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600, fontSize: 13 }}>{current} cm</span>
-                        {delta !== null && <span style={{ fontSize: 11, fontWeight: 700, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{delta > 0 ? '+' : ''}{delta}</span>}
-                      </div>
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            )}
-
             {latestWeekly?.photoURLs && Object.values(latestWeekly.photoURLs).some(u => u) && (
               <div className="card" style={{ marginBottom: 20 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📸 Dernières photos</div>

@@ -376,6 +376,15 @@ export default function CoachClientDetail() {
   const bmr = calculateBMR({ weight: client.weight, height: client.height, age, sex: client.sex });
   const tdee = calculateTDEE({ bmr, activityLevel: client.activityLevel });
   const latestWeekly = weeklyEntries[weeklyEntries.length - 1];
+  const prevWeekly = weeklyEntries.length >= 2 ? weeklyEntries[weeklyEntries.length - 2] : null;
+  const MEAS_KEYS = [
+    { key: 'waist', label: 'Taille', emoji: '👗' },
+    { key: 'hips', label: 'Hanches', emoji: '🔵' },
+    { key: 'glutes', label: 'Fesses', emoji: '🍑' },
+    { key: 'thighs', label: 'Cuisses', emoji: '🦵' },
+    { key: 'arms', label: 'Bras', emoji: '💪' },
+  ];
+  const menstruationDays = entries.filter(e => e.menstruation).length;
   const weights = entries.filter(e => e.weight).map(e => ({ date: e.date, weight: e.weight, label: format(new Date(e.date), 'dd/MM', { locale: fr }) }));
   const firstWeight = weights.length > 0 ? weights[0].weight : null;
   const lastWeight = weights.length > 0 ? weights[weights.length - 1].weight : null;
@@ -521,6 +530,88 @@ export default function CoachClientDetail() {
                 )}
               </div>
             )}
+
+            {/* Progrès entre 2 bilans */}
+            {latestWeekly && (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
+                  📈 Entre les bilans
+                  <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
+                    {prevWeekly
+                      ? format(new Date(prevWeekly.weekStart), "d MMM", { locale: fr }) + ' → ' + format(new Date(latestWeekly.weekStart), "d MMM", { locale: fr })
+                      : 'depuis le début'}
+                  </span>
+                </div>
+                {latestWeekly.avgWeight && (() => {
+                  const prev = prevWeekly?.avgWeight || client.startWeight;
+                  const delta = prev ? +(latestWeekly.avgWeight - prev).toFixed(1) : null;
+                  return (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border-light)', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>⚖️ Poids moy.</span>
+                      <div>
+                        <span style={{ fontWeight: 700 }}>{latestWeekly.avgWeight} kg</span>
+                        {delta !== null && <span style={{ marginLeft: 8, fontWeight: 700, color: delta < 0 ? 'var(--success)' : 'var(--warning)' }}>{delta > 0 ? '+' : ''}{delta} kg</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {latestWeekly.measurements && MEAS_KEYS.map((m, idx) => {
+                  const curr = latestWeekly.measurements[m.key];
+                  const prev = prevWeekly?.measurements?.[m.key] || client.startMeasurements?.[m.key];
+                  if (!curr) return null;
+                  const delta = prev ? +(curr - prev).toFixed(1) : null;
+                  return (
+                    <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: idx < 4 ? '1px solid var(--border-light)' : 'none', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{m.emoji} {m.label}</span>
+                      <div>
+                        <span style={{ fontWeight: 700 }}>{curr} cm</span>
+                        {delta !== null && <span style={{ marginLeft: 8, fontWeight: 700, color: delta < 0 ? 'var(--success)' : 'var(--warning)' }}>{delta > 0 ? '+' : ''}{delta} cm</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {client.sex === 'F' && menstruationDays > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>🩸 Jours règles tracés</span>
+                    <span style={{ fontWeight: 700 }}>{menstruationDays} j.</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Depuis le début */}
+            {(client.startWeight || client.startMeasurements) && (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>🏁 Depuis le début</div>
+                {client.startWeight && lastWeight && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border-light)', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>⚖️ Poids <span style={{ fontSize: 11 }}>(départ : {client.startWeight} kg)</span></span>
+                    <div>
+                      <span style={{ fontWeight: 700 }}>{lastWeight} kg</span>
+                      {weightDelta !== null && <span style={{ marginLeft: 8, fontWeight: 700, color: weightDelta < 0 ? 'var(--success)' : 'var(--warning)' }}>{weightDelta > 0 ? '+' : ''}{weightDelta} kg</span>}
+                    </div>
+                  </div>
+                )}
+                {client.startMeasurements && latestWeekly?.measurements && MEAS_KEYS.map((m, idx, arr) => {
+                  const curr = latestWeekly.measurements[m.key];
+                  const start = client.startMeasurements[m.key];
+                  if (!curr || !start) return null;
+                  const delta = +(curr - start).toFixed(1);
+                  return (
+                    <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: idx < arr.length - 1 ? '1px solid var(--border-light)' : 'none', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{m.emoji} {m.label} <span style={{ fontSize: 11 }}>(départ : {start})</span></span>
+                      <div>
+                        <span style={{ fontWeight: 700 }}>{curr} cm</span>
+                        <span style={{ marginLeft: 8, fontWeight: 700, color: delta < 0 ? 'var(--success)' : delta > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>{delta > 0 ? '+' : ''}{delta} cm</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+              </>
+            )}
+
             {vueTab === 'infos' && (
               <>
             <div className="card" style={{ marginBottom: 16 }}>
@@ -658,10 +749,6 @@ export default function CoachClientDetail() {
               </button>
             </div>
 
-
-              </>
-            )}
-
             {/* ── NOTES & PATHOLOGIES ── */}
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editNotes ? 12 : 8 }}>
@@ -701,6 +788,36 @@ export default function CoachClientDetail() {
                 </div>
               )}
             </div>
+            {/* Notes & Pathologies */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editNotes ? 12 : 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>🏥 Notes & Pathologies</div>
+                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setEditNotes(!editNotes); setNotesForm(client.coachNotes || ''); }}>
+                  {editNotes ? 'Annuler' : client.coachNotes ? 'Modifier' : '+ Ajouter'}
+                </button>
+              </div>
+              {!editNotes && client.coachNotes && (
+                <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{client.coachNotes}</div>
+              )}
+              {!editNotes && !client.coachNotes && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Antécédents, pathologies, allergies, contraintes particulières...</p>
+              )}
+              {editNotes && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <textarea className="input" rows={5} value={notesForm}
+                    onChange={e => setNotesForm(e.target.value)}
+                    placeholder="Antécédents médicaux, pathologies, allergies, médicaments..."
+                    style={{ resize: 'vertical', lineHeight: 1.6 }}
+                  />
+                  <button className="btn btn-primary" onClick={async () => {
+                    await updateDoc(doc(db, 'clients', clientId), { coachNotes: notesForm });
+                    setClient(p => ({ ...p, coachNotes: notesForm }));
+                    setEditNotes(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+                  }}>✅ Enregistrer</button>
+                </div>
+              )}
+            </div>
+
             {/* ── COACHING ── */}
             <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>

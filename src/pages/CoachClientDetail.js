@@ -30,6 +30,8 @@ export default function CoachClientDetail() {
   const [notesForm, setNotesForm] = useState('');
   const [editBalance, setEditBalance] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
+  const [editingCoachComment, setEditingCoachComment] = useState(null);
+  const [coachCommentForm, setCoachCommentForm] = useState('');
   const [infoForm, setInfoForm] = useState({});
   function setI(key, val) { setInfoForm(p => ({ ...p, [key]: val })); }
   // Données de départ
@@ -1065,7 +1067,42 @@ export default function CoachClientDetail() {
                   </div>
                 )}
                 {e.notes && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>"{e.notes}"</p>}
+
+              {/* Commentaire coach */}
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>💬 Commentaire coach</div>
+                {editingCoachComment === w.weekStart ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      value={coachCommentForm}
+                      onChange={e => setCoachCommentForm(e.target.value)}
+                      placeholder="Feedback, conseils, points à travailler..."
+                      style={{ resize: 'vertical', lineHeight: 1.5, fontSize: 13 }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditingCoachComment(null)}>Annuler</button>
+                      <button className="btn btn-primary" style={{ flex: 1 }} onClick={async () => {
+                        const { doc: d, setDoc: sd } = await import('firebase/firestore');
+                        await sd(d(db, 'clients', clientId, 'weeklyEntries', w.weekStart), { coachComment: coachCommentForm }, { merge: true });
+                        setWeeklyEntries(prev => prev.map(e => e.weekStart === w.weekStart ? { ...e, coachComment: coachCommentForm } : e));
+                        setEditingCoachComment(null);
+                      }}>✅ Enregistrer</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ fontSize: 13, lineHeight: 1.6, flex: 1, fontStyle: w.coachComment ? 'normal' : 'italic', color: w.coachComment ? 'var(--text)' : 'var(--text-muted)' }}>
+                      {w.coachComment || 'Aucun commentaire'}
+                    </div>
+                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto', flexShrink: 0 }} onClick={() => { setEditingCoachComment(w.weekStart); setCoachCommentForm(w.coachComment || ''); }}>
+                      ✏️
+                    </button>
+                  </div>
+                )}
               </div>
+            </div>
             ))}
           </div>
         )}
@@ -1104,9 +1141,26 @@ export default function CoachClientDetail() {
             )}
             {[...weeklyEntries].reverse().map(w => (
               <div key={w.weekStart} className="card">
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
-                  Semaine du {format(new Date(w.weekStart), 'd MMM', { locale: fr })}
-                  {w.avgWeight && <span className="badge badge-primary" style={{ marginLeft: 8 }}>{w.avgWeight} kg</span>}
+                {/* Header avec statut */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    Semaine du {format(new Date(w.weekStart), 'd MMM', { locale: fr })}
+                    {w.avgWeight && <span className="badge badge-primary" style={{ marginLeft: 8 }}>{w.avgWeight} kg</span>}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const { doc: d, setDoc: sd } = await import('firebase/firestore');
+                      const newStatus = w.coachStatus === 'done' ? 'pending' : 'done';
+                      await sd(d(db, 'clients', clientId, 'weeklyEntries', w.weekStart), { coachStatus: newStatus }, { merge: true });
+                      setWeeklyEntries(prev => prev.map(e => e.weekStart === w.weekStart ? { ...e, coachStatus: newStatus } : e));
+                    }}
+                    style={{
+                      padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12,
+                      background: w.coachStatus === 'done' ? 'var(--success-light)' : 'var(--warning-light)',
+                      color: w.coachStatus === 'done' ? 'var(--success)' : 'var(--warning)',
+                    }}>
+                    {w.coachStatus === 'done' ? '✅ Traité' : '🔔 À traiter'}
+                  </button>
                 </div>
                 {w.questionnaire && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>

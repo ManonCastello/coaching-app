@@ -225,6 +225,47 @@ export default function ProgressPage() {
           </>
         )}
 
+        {/* Journal des bilans */}
+        {weeklyEntries.length > 0 && (
+          <>
+            <h2 className="section-title">Journal des bilans</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              {[...weeklyEntries].reverse().map(w => (
+                <div key={w.weekStart} className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>
+                      Semaine du {format(new Date(w.weekStart), 'd MMM yyyy', { locale: fr })}
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                      background: w.coachStatus === 'done' ? 'var(--success-light)' : 'var(--warning-light)',
+                      color: w.coachStatus === 'done' ? 'var(--success)' : 'var(--warning)',
+                    }}>
+                      {w.coachStatus === 'done' ? '✅ Traité' : '🔔 En attente'}
+                    </span>
+                  </div>
+                  {w.avgWeight && (
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      ⚖️ Poids moyen : <strong>{w.avgWeight} kg</strong>
+                    </div>
+                  )}
+                  {w.coachComment && (
+                    <div style={{ background: 'var(--primary-bg)', borderRadius: 10, padding: '10px 14px', borderLeft: '3px solid var(--primary)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>💬 Commentaire de ta coach</div>
+                      <div style={{ fontSize: 13, lineHeight: 1.6 }}>{w.coachComment}</div>
+                    </div>
+                  )}
+                  {!w.coachComment && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Commentaire coach en attente...
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* Vide */}
         {dailyEntries.length === 0 && weeklyEntries.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>

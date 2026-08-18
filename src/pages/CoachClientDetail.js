@@ -738,56 +738,6 @@ export default function CoachClientDetail() {
             )}
 
 
-            {/* Week balance reset */}
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>⚖️ Balance calorique semaine</div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-                Remet la balance de la semaine en cours à zéro pour ce client.
-              </p>
-              <button onClick={resetWeekBalance} className="btn btn-secondary">
-                🔄 Remettre la balance à zéro
-              </button>
-            </div>
-
-            {/* ── NOTES & PATHOLOGIES ── */}
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editNotes ? 12 : 8 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>🏥 Notes & Pathologies</div>
-                <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setEditNotes(!editNotes); setNotesForm(client.coachNotes || ''); }}>
-                  {editNotes ? 'Annuler' : client.coachNotes ? 'Modifier' : '+ Ajouter'}
-                </button>
-              </div>
-              {!editNotes && client.coachNotes && (
-                <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{client.coachNotes}</div>
-              )}
-              {!editNotes && !client.coachNotes && (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Antécédents, pathologies, allergies, contraintes particulières...</p>
-              )}
-              {editNotes && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <textarea
-                    className="input"
-                    rows={6}
-                    value={notesForm}
-                    onChange={e => setNotesForm(e.target.value)}
-                    placeholder="Antécédents médicaux, pathologies, allergies, contraintes particulières, médicaments..."
-                    style={{ resize: 'vertical', lineHeight: 1.6 }}
-                  />
-                  <button className="btn btn-primary" onClick={async () => {
-                    await updateDoc(doc(db, 'clients', clientId), { coachNotes: notesForm });
-                    setClient(p => ({ ...p, coachNotes: notesForm }));
-                    setEditNotes(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
-                  }}>✅ Enregistrer</button>
-                </div>
-              )}
-              {/* Données consultation si disponible */}
-              {clientConsultation?.healthNotes && (
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>📋 Notes santé (consultation)</div>
-                  <div style={{ fontSize: 13, lineHeight: 1.6 }}>{clientConsultation.healthNotes}</div>
-                </div>
-              )}
-            </div>
             {/* Notes & Pathologies */}
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editNotes ? 12 : 8 }}>

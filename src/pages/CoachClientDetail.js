@@ -1209,6 +1209,63 @@ export default function CoachClientDetail() {
                     </div>
                   </div>
                 )}
+
+                {/* Résumé nutritionnel */}
+                {wStats && client.coachingMode !== 'intuitif' && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-light)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>📊 Résumé nutritionnel · {wStats.count} jour{wStats.count > 1 ? 's' : ''}</div>
+                    {[
+                      { label: '🔥 Calories moy.', avg: wStats.avgCalories, target: client.targets?.calories, unit: 'kcal', color: 'var(--primary)' },
+                      { label: '🥩 Protéines moy.', avg: wStats.avgProtein, target: client.targets?.protein, unit: 'g', color: '#F59E0B' },
+                    ].map(m => {
+                      const pct = m.target ? Math.round((m.avg / m.target) * 100) : null;
+                      return (
+                        <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{m.label}</span>
+                          <div>
+                            <span style={{ fontWeight: 700, color: m.color }}>{m.avg} {m.unit}</span>
+                            {pct && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: pct >= 85 && pct <= 115 ? 'var(--success)' : 'var(--warning)' }}>{pct > 100 ? '+' : ''}{pct - 100}%</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Commentaire coach */}
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>💬 Commentaire coach</div>
+                  {editingCoachComment === w.weekStart ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <textarea
+                        className="input"
+                        rows={3}
+                        value={coachCommentForm}
+                        onChange={e => setCoachCommentForm(e.target.value)}
+                        placeholder="Feedback, conseils, points à travailler..."
+                        style={{ resize: 'vertical', lineHeight: 1.5, fontSize: 13 }}
+                      />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditingCoachComment(null)}>Annuler</button>
+                        <button className="btn btn-primary" style={{ flex: 1 }} onClick={async () => {
+                          const { doc: d, setDoc: sd } = await import('firebase/firestore');
+                          await sd(d(db, 'clients', clientId, 'weeklyEntries', w.weekStart), { coachComment: coachCommentForm }, { merge: true });
+                          setWeeklyEntries(prev => prev.map(e => e.weekStart === w.weekStart ? { ...e, coachComment: coachCommentForm } : e));
+                          setEditingCoachComment(null);
+                        }}>✅ Enregistrer</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ fontSize: 13, lineHeight: 1.6, flex: 1, fontStyle: w.coachComment ? 'normal' : 'italic', color: w.coachComment ? 'var(--text)' : 'var(--text-muted)' }}>
+                        {w.coachComment || 'Aucun commentaire — clique pour ajouter'}
+                      </div>
+                      <button className="btn btn-secondary btn-sm" style={{ width: 'auto', flexShrink: 0 }} onClick={() => { setEditingCoachComment(w.weekStart); setCoachCommentForm(w.coachComment || ''); }}>
+                        ✏️
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

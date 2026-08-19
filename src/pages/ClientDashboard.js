@@ -342,12 +342,20 @@ export default function ClientDashboard() {
             {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (
               <div className="card" style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>RÉPARTITION CONSEILLÉE POUR TOI</div>
-                {[
-                  { label: '🌅 Matin', r: 0.25 },
-                  { label: '☀️ Midi', r: 0.35 },
-                  { label: '🌙 Soir', r: 0.30 },
-                  { label: '🍎 Collation', r: 0.10 },
-                ].map(m => (
+                {(profile.mealSplit
+                  ? [
+                    { label: '🌅 Matin', r: (profile.mealSplit.morning || 25) / 100 },
+                    { label: '☀️ Midi', r: (profile.mealSplit.lunch || 35) / 100 },
+                    { label: '🌙 Soir', r: (profile.mealSplit.dinner || 30) / 100 },
+                    ...((profile.mealSplit.snack || 0) > 0 ? [{ label: '🍎 Collation', r: profile.mealSplit.snack / 100 }] : []),
+                  ]
+                  : [
+                    { label: '🌅 Matin', r: 0.25 },
+                    { label: '☀️ Midi', r: 0.35 },
+                    { label: '🌙 Soir', r: 0.30 },
+                    { label: '🍎 Collation', r: 0.10 },
+                  ]
+                ).map(m => (
                   <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginBottom: 6, border: '1px solid var(--border-light)', borderRadius: 10, background: 'var(--bg)' }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{m.label}</span>
                     <div style={{ textAlign: 'right' }}>

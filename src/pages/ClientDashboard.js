@@ -13,6 +13,7 @@ import CoachToggle from '../components/CoachToggle';
 export default function ClientDashboard() {
   const { currentUser, logout, userRole, coachMode, switchMode } = useAuth();
   const navigate = useNavigate();
+  function handleToggle() { switchMode(); navigate('/coach'); }
   const [profile, setProfile] = useState(null);
   const [todayEntry, setTodayEntry] = useState(null);
   const [recentEntries, setRecentEntries] = useState([]);

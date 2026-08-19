@@ -112,13 +112,16 @@ export default function DailyCheckIn({ coachMode }) {
 
   // Écoute temps réel des objectifs hebdo
   useEffect(() => {
-    const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    const q = query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
-    const unsub = onSnapshot(q, snap => {
-      if (!snap.empty) setWeekGoals(snap.docs[0].data());
-      else setWeekGoals(null);
-    });
-    return () => unsub();
+    if (!currentUser?.uid) return;
+    let unsub;
+    try {
+      const q = query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
+      unsub = onSnapshot(q, snap => {
+        if (!snap.empty) setWeekGoals(snap.docs[0].data());
+        else setWeekGoals(null);
+      }, err => console.error('weekGoals snapshot error:', err));
+    } catch(e) { console.error(e); }
+    return () => unsub && unsub();
   }, [currentUser.uid]);
 
   async function handleLock() {

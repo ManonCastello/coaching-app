@@ -1068,9 +1068,11 @@ export default function CoachClientDetail() {
                 )}
                 {e.notes && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>"{e.notes}"</p>}
 
-            </div>
+              </div>
             ))}
           </div>
+        )}
+
         )}
 
         {/* BILANS */}
@@ -1637,7 +1639,6 @@ export default function CoachClientDetail() {
           </div>
         )}
 
-      </div>
     {photoViewer && (
       <PhotoViewer
         photoURLs={photoViewer.photoURLs}
@@ -1645,6 +1646,7 @@ export default function CoachClientDetail() {
         onClose={() => setPhotoViewer(null)}
       />
     )}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { format, subDays, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
@@ -74,17 +74,7 @@ export default function DailyCheckIn({ coachMode }) {
         setProfile(profileData);
       }
 
-      // Charger les objectifs hebdo actifs
-      const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const goalsDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weekGoals', weekKey));
-      if (!goalsDoc.exists()) {
-        // Chercher les derniers objectifs actifs
-        const goalsQ = query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
-        const goalsSnap = await getDocs(goalsQ);
-        if (!goalsSnap.empty) setWeekGoals(goalsSnap.docs[0].data());
-      } else {
-        setWeekGoals(goalsDoc.data());
-      }
+      // Charger les objectifs hebdo : géré par onSnapshot séparé
 
       const entryDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate));
       if (entryDoc.exists()) {
@@ -119,6 +109,17 @@ export default function DailyCheckIn({ coachMode }) {
     }
     load();
   }, [currentUser.uid, targetDate]);
+
+  // Écoute temps réel des objectifs hebdo
+  useEffect(() => {
+    const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const q = query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
+    const unsub = onSnapshot(q, snap => {
+      if (!snap.empty) setWeekGoals(snap.docs[0].data());
+      else setWeekGoals(null);
+    });
+    return () => unsub();
+  }, [currentUser.uid]);
 
   async function handleLock() {
     if (!window.confirm('Valider définitivement cette journée ? Les valeurs seront figées.')) return;

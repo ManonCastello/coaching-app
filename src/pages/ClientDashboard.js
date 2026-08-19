@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { format, getDay, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
@@ -38,7 +38,7 @@ export default function ClientDashboard() {
       const p = profileDoc.data();
       setProfile(p);
 
-      const [weekDoc, todayDoc, entriesSnap, resetDoc, weeklySnap, wgSnap] = await Promise.all([
+      const [weekDoc, todayDoc, entriesSnap, resetDoc, weeklySnap] = await Promise.all([
         (p.weeklyBilanDay !== undefined && p.weeklyBilanDay === todayDayOfWeek)
           ? getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey))
           : Promise.resolve(null),
@@ -46,7 +46,6 @@ export default function ClientDashboard() {
         getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(90))),
         getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey)),
         getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(1))),
-        getDocs(query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1))),
       ]);
 
       if (weekDoc && !weekDoc.exists()) setWeeklyToday(true);
@@ -60,7 +59,6 @@ export default function ClientDashboard() {
       setRecentEntries([...entries].slice(0, 7).reverse());
 
       if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
-      if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -74,7 +72,15 @@ export default function ClientDashboard() {
 
   useEffect(() => { loadData(); }, [currentUser.uid, today]);
 
-  function handleToggle() { switchMode(); navigate('/coach'); }
+  // Écoute temps réel des objectifs hebdo
+  useEffect(() => {
+    const q = query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
+    const unsub = onSnapshot(q, snap => {
+      if (!snap.empty) setWeekGoals(snap.docs[0].data());
+      else setWeekGoals(null);
+    });
+    return () => unsub();
+  }, [currentUser.uid]);
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
 

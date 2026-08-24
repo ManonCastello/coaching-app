@@ -1073,8 +1073,6 @@ export default function CoachClientDetail() {
           </div>
         )}
 
-        )}
-
         {/* BILANS */}
         {activeTab === 'bilans' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1107,7 +1105,16 @@ export default function CoachClientDetail() {
                 </div>
               </div>
             )}
-            {[...weeklyEntries].reverse().map(w => (
+            {[...weeklyEntries].reverse().map(w => {
+              // Calculer stats depuis entries chargées si weekStats absent
+              const wEnd = w.weekEnd || w.weekStart;
+              const wStart = w.weekStart;
+              const wDays = entries.filter(e => e.date >= wStart && e.date <= wEnd && e.calories > 0)
+                .map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0 }));
+              const avg = key => wDays.length ? Math.round(entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).reduce((s,e) => s + (e[key]||0), 0) / (entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).length || 1)) : 0;
+              const computedStats = wDays.length > 0 ? { days: wDays, count: wDays.length, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat') } : null;
+              const statsToShow = w.weekStats?.days ? w.weekStats : computedStats;
+              return (
               <div key={w.weekStart} className="card">
                 {/* Header avec statut */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1179,13 +1186,13 @@ export default function CoachClientDetail() {
                 )}
 
                 {/* Graphique nutritionnel */}
-                {w.weekStats?.days && (
+                {statsToShow?.days && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-light)' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
-                      📊 Résumé nutritionnel · {w.weekStats.count} jour{w.weekStats.count > 1 ? 's' : ''}
+                      📊 Résumé nutritionnel · {statsToShow.count} jour{statsToShow.count > 1 ? 's' : ''}
                     </div>
                     <ResponsiveContainer width="100%" height={90}>
-                      <BarChart data={w.weekStats.days} barSize={14}>
+                      <BarChart data={statsToShow.days} barSize={14}>
                         <XAxis dataKey="label" tick={{ fontSize: 9 }} />
                         <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={v => [`${v} kcal`]} />
                         <Bar dataKey="calories" radius={[3,3,0,0]} fill="var(--primary)" opacity={0.8} />
@@ -1193,10 +1200,10 @@ export default function CoachClientDetail() {
                     </ResponsiveContainer>
                     <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
                       {[
-                        { label: '🔥 Cal.', val: w.weekStats.avgCalories, color: 'var(--primary)' },
-                        { label: '🥩 Prot.', val: w.weekStats.avgProtein, color: '#F59E0B' },
-                        { label: '🌾 Gluc.', val: w.weekStats.avgCarbs, color: '#EC4899' },
-                        { label: '🥑 Lip.', val: w.weekStats.avgFat, color: '#7C3AED' },
+                        { label: '🔥 Cal.', val: statsToShow.avgCalories, color: 'var(--primary)' },
+                        { label: '🥩 Prot.', val: statsToShow.avgProtein, color: '#F59E0B' },
+                        { label: '🌾 Gluc.', val: statsToShow.avgCarbs, color: '#EC4899' },
+                        { label: '🥑 Lip.', val: statsToShow.avgFat, color: '#7C3AED' },
                       ].map(m => (
                         <div key={m.label} style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           {m.label} <strong style={{ color: m.color }}>{m.val}</strong>
@@ -1241,7 +1248,8 @@ export default function CoachClientDetail() {
                   )}
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         )}
 

@@ -1068,7 +1068,41 @@ export default function CoachClientDetail() {
                 )}
                 {e.notes && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>"{e.notes}"</p>}
 
+              {/* Commentaire coach */}
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>💬 Commentaire coach</div>
+                {editingCoachComment === w.weekStart ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      value={coachCommentForm}
+                      onChange={e => setCoachCommentForm(e.target.value)}
+                      placeholder="Feedback, conseils, points à travailler..."
+                      style={{ resize: 'vertical', lineHeight: 1.5, fontSize: 13 }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditingCoachComment(null)}>Annuler</button>
+                      <button className="btn btn-primary" style={{ flex: 1 }} onClick={async () => {
+                        const { doc: d, setDoc: sd } = await import('firebase/firestore');
+                        await sd(d(db, 'clients', clientId, 'weeklyEntries', w.weekStart), { coachComment: coachCommentForm }, { merge: true });
+                        setWeeklyEntries(prev => prev.map(e => e.weekStart === w.weekStart ? { ...e, coachComment: coachCommentForm } : e));
+                        setEditingCoachComment(null);
+                      }}>✅ Enregistrer</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ fontSize: 13, lineHeight: 1.6, flex: 1, fontStyle: w.coachComment ? 'normal' : 'italic', color: w.coachComment ? 'var(--text)' : 'var(--text-muted)' }}>
+                      {w.coachComment || 'Aucun commentaire'}
+                    </div>
+                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto', flexShrink: 0 }} onClick={() => { setEditingCoachComment(w.weekStart); setCoachCommentForm(w.coachComment || ''); }}>
+                      ✏️
+                    </button>
+                  </div>
+                )}
               </div>
+            </div>
             ))}
           </div>
         )}
@@ -1172,6 +1206,34 @@ export default function CoachClientDetail() {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Graphique nutritionnel */}
+                {w.weekStats?.days && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-light)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
+                      📊 Résumé nutritionnel · {w.weekStats.count} jour{w.weekStats.count > 1 ? 's' : ''}
+                    </div>
+                    <ResponsiveContainer width="100%" height={90}>
+                      <BarChart data={w.weekStats.days} barSize={14}>
+                        <XAxis dataKey="label" tick={{ fontSize: 9 }} />
+                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={v => [`${v} kcal`]} />
+                        <Bar dataKey="calories" radius={[3,3,0,0]} fill="var(--primary)" opacity={0.8} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
+                      {[
+                        { label: '🔥 Cal.', val: w.weekStats.avgCalories, color: 'var(--primary)' },
+                        { label: '🥩 Prot.', val: w.weekStats.avgProtein, color: '#F59E0B' },
+                        { label: '🌾 Gluc.', val: w.weekStats.avgCarbs, color: '#EC4899' },
+                        { label: '🥑 Lip.', val: w.weekStats.avgFat, color: '#7C3AED' },
+                      ].map(m => (
+                        <div key={m.label} style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {m.label} <strong style={{ color: m.color }}>{m.val}</strong>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1637,6 +1699,7 @@ export default function CoachClientDetail() {
           </div>
         )}
 
+      </div>
     {photoViewer && (
       <PhotoViewer
         photoURLs={photoViewer.photoURLs}
@@ -1644,7 +1707,6 @@ export default function CoachClientDetail() {
         onClose={() => setPhotoViewer(null)}
       />
     )}
-      </div>
     </div>
   );
 }

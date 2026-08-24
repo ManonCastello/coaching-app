@@ -41,10 +41,13 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
-  const weekKey = format(startOfWeek(subDays(new Date(), weekOffset * 7), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  const prevWeekKey = format(startOfWeek(subDays(new Date(), (weekOffset + 1) * 7), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  // weekKey = date d'aujourd'hui - 7j * offset (les 7 derniers jours)
+  const bilanDate = subDays(new Date(), weekOffset * 7);
+  const weekEnd = format(bilanDate, 'yyyy-MM-dd');
+  const weekKey = format(subDays(bilanDate, 6), 'yyyy-MM-dd'); // 7 jours avant
+  const prevWeekKey = format(subDays(bilanDate, 13), 'yyyy-MM-dd');
   const isCurrentWeek = weekOffset === 0;
-  const weekLabel = format(new Date(weekKey), "'Semaine du' d MMMM yyyy", { locale: fr });
+  const weekLabel = format(subDays(bilanDate, 6), "d MMM", { locale: fr }) + ' → ' + format(bilanDate, "d MMM yyyy", { locale: fr });
   const [prevMeasurements, setPrevMeasurements] = useState(null);
 
   const [form, setForm] = useState({
@@ -87,10 +90,9 @@ export default function WeeklyCheckIn({ coachMode }) {
 
       // Calculate week stats from daily entries
       const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-      const weekStart = weekKey;
       const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
       const snap = await getDocs(q);
-      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= weekStart);
+      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= weekKey && e.date <= weekEnd);
       if (entries.length > 0) {
         const days = entries.map(e => ({
           label: format(new Date(e.date), 'EEE', { locale: fr }),
@@ -150,6 +152,8 @@ export default function WeeklyCheckIn({ coachMode }) {
     try {
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey), {
         weekStart: weekKey,
+        weekEnd: weekEnd,
+        bilanDate: format(new Date(), 'yyyy-MM-dd'),
         avgWeight: form.avgWeight ? +form.avgWeight : null,
         measurements: {
           waist: form.waist ? +form.waist : null,
@@ -169,6 +173,7 @@ export default function WeeklyCheckIn({ coachMode }) {
         weekNotes: form.weekNotes,
         weekHighlight: form.weekHighlight,
         weekDifficulty: form.weekDifficulty,
+        weekStats: weekStats || null,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setSaved(true);
@@ -200,7 +205,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       </div>
 
       <div className="page">
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>📅 {weekLabel}</p>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>📅 {weekLabel} · Saisi le {format(new Date(), 'd MMM yyyy', { locale: fr })}</p>
         {saved && <div className="alert alert-success">✅ Bilan enregistré !</div>}
 
         {/* Weight */}

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, getDay, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
@@ -13,7 +13,6 @@ import CoachToggle from '../components/CoachToggle';
 export default function ClientDashboard() {
   const { currentUser, logout, userRole, coachMode, switchMode } = useAuth();
   const navigate = useNavigate();
-  function handleToggle() { switchMode(); navigate('/coach'); }
   const [profile, setProfile] = useState(null);
   const [todayEntry, setTodayEntry] = useState(null);
   const [recentEntries, setRecentEntries] = useState([]);
@@ -39,7 +38,7 @@ export default function ClientDashboard() {
       const p = profileDoc.data();
       setProfile(p);
 
-      const [weekDoc, todayDoc, entriesSnap, resetDoc, weeklySnap] = await Promise.all([
+      const [weekDoc, todayDoc, entriesSnap, resetDoc, weeklySnap, wgSnap] = await Promise.all([
         (p.weeklyBilanDay !== undefined && p.weeklyBilanDay === todayDayOfWeek)
           ? getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey))
           : Promise.resolve(null),
@@ -47,6 +46,7 @@ export default function ClientDashboard() {
         getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(90))),
         getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey)),
         getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(1))),
+        getDocs(query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1))),
       ]);
 
       if (weekDoc && !weekDoc.exists()) setWeeklyToday(true);
@@ -60,6 +60,7 @@ export default function ClientDashboard() {
       setRecentEntries([...entries].slice(0, 7).reverse());
 
       if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
+      if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
         const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -73,19 +74,7 @@ export default function ClientDashboard() {
 
   useEffect(() => { loadData(); }, [currentUser.uid, today]);
 
-  // Écoute temps réel des objectifs hebdo
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-    let unsub;
-    try {
-      const q = query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
-      unsub = onSnapshot(q, snap => {
-        if (!snap.empty) setWeekGoals(snap.docs[0].data());
-        else setWeekGoals(null);
-      }, err => console.error('weekGoals snapshot error:', err));
-    } catch(e) { console.error(e); }
-    return () => unsub && unsub();
-  }, [currentUser.uid]);
+  function handleToggle() { switchMode(); navigate('/coach'); }
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
 
@@ -139,18 +128,15 @@ export default function ClientDashboard() {
       <div className="page">
 
         {/* Banners */}
-        {weeklyToday && (
-          <div style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', borderRadius: 'var(--radius)', padding: '20px', marginBottom: 16, color: 'white', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <p style={{ fontSize: 13, opacity: 0.9, marginBottom: 6 }}>📅 C'est le jour de ton bilan !</p>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Bilan hebdomadaire</h3>
-              <Link to="/checkin/weekly" style={{ textDecoration: 'none' }}>
-                <button style={{ background: 'white', color: '#D97706', border: 'none', borderRadius: 'var(--radius-full)', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Faire mon bilan →</button>
-              </Link>
-            </div>
-            <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }} />
+        <div style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', borderRadius: 'var(--radius)', padding: '16px 20px', marginBottom: 16, color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <p style={{ fontSize: 12, opacity: 0.85, marginBottom: 2 }}>📋 Bilan des 7 derniers jours</p>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>Bilan hebdomadaire</div>
           </div>
-        )}
+          <Link to="/checkin/weekly" style={{ textDecoration: 'none' }}>
+            <button style={{ background: 'white', color: '#D97706', border: 'none', borderRadius: 'var(--radius-full)', padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 13 }}>Remplir →</button>
+          </Link>
+        </div>
         {!todayEntry && (
           <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderRadius: 'var(--radius)', padding: '20px', marginBottom: 16, color: 'white', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'relative', zIndex: 1 }}>
@@ -342,20 +328,12 @@ export default function ClientDashboard() {
             {profile.coachingMode !== 'intuitif' && targets?.calories > 0 && (
               <div className="card" style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', marginBottom: 12 }}>RÉPARTITION CONSEILLÉE POUR TOI</div>
-                {(profile.mealSplit
-                  ? [
-                    { label: '🌅 Matin', r: (profile.mealSplit.morning || 25) / 100 },
-                    { label: '☀️ Midi', r: (profile.mealSplit.lunch || 35) / 100 },
-                    { label: '🌙 Soir', r: (profile.mealSplit.dinner || 30) / 100 },
-                    ...((profile.mealSplit.snack || 0) > 0 ? [{ label: '🍎 Collation', r: profile.mealSplit.snack / 100 }] : []),
-                  ]
-                  : [
-                    { label: '🌅 Matin', r: 0.25 },
-                    { label: '☀️ Midi', r: 0.35 },
-                    { label: '🌙 Soir', r: 0.30 },
-                    { label: '🍎 Collation', r: 0.10 },
-                  ]
-                ).map(m => (
+                {[
+                  { label: '🌅 Matin', r: 0.25 },
+                  { label: '☀️ Midi', r: 0.35 },
+                  { label: '🌙 Soir', r: 0.30 },
+                  { label: '🍎 Collation', r: 0.10 },
+                ].map(m => (
                   <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginBottom: 6, border: '1px solid var(--border-light)', borderRadius: 10, background: 'var(--bg)' }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{m.label}</span>
                     <div style={{ textAlign: 'right' }}>

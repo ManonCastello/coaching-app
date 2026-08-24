@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, getDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Cell } from 'recharts';
 import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import TabBar from '../components/TabBar';
 import CoachToggle from '../components/CoachToggle';
 
@@ -298,6 +298,35 @@ export default function ProgressPage() {
                       <div style={{ fontSize: 13, lineHeight: 1.6 }}>{w.coachComment}</div>
                     </div>
                   )}
+
+                  {/* Graphique calories si données dispo */}
+                  {w.weekStats && w.weekStats.days && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>
+                        📊 Résumé nutritionnel · {w.weekStats.count} jour{w.weekStats.count > 1 ? 's' : ''}
+                      </div>
+                      <ResponsiveContainer width="100%" height={100}>
+                        <BarChart data={w.weekStats.days} barSize={14}>
+                          <XAxis dataKey="label" tick={{ fontSize: 9 }} />
+                          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={v => [`${v} kcal`]} />
+                          <Bar dataKey="calories" radius={[3,3,0,0]} fill="var(--primary)" opacity={0.8} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
+                        {[
+                          { label: '🔥 Cal.', val: w.weekStats.avgCalories, target: null, color: 'var(--primary)' },
+                          { label: '🥩 Prot.', val: w.weekStats.avgProtein, color: '#F59E0B' },
+                          { label: '🌾 Gluc.', val: w.weekStats.avgCarbs, color: '#EC4899' },
+                          { label: '🥑 Lip.', val: w.weekStats.avgFat, color: '#7C3AED' },
+                        ].map(m => (
+                          <div key={m.label} style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {m.label} <strong style={{ color: m.color }}>{m.val}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {!w.coachComment && (
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 8 }}>
                       Commentaire coach en attente...

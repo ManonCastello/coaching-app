@@ -1107,8 +1107,8 @@ export default function CoachClientDetail() {
             )}
             {[...weeklyEntries].reverse().map(w => {
               // Calculer stats depuis entries chargées si weekStats absent
-              const wEnd = w.weekEnd || w.weekStart;
               const wStart = w.weekStart;
+              const wEnd = w.weekEnd || format(new Date(new Date(w.weekStart).getTime() + 6 * 86400000), 'yyyy-MM-dd');
               const wDays = entries.filter(e => e.date >= wStart && e.date <= wEnd && e.calories > 0)
                 .map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0 }));
               const avg = key => wDays.length ? Math.round(entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).reduce((s,e) => s + (e[key]||0), 0) / (entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).length || 1)) : 0;

@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS } from '../utils/calculations';
 import PhotoViewer from '../components/PhotoViewer';
 

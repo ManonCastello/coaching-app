@@ -64,15 +64,22 @@ export default function WeeklyCheckIn({ coachMode }) {
 
   function set(key, val) { setForm(p => ({ ...p, [key]: val })); }
 
+  // Chargement initial : profil + liste des bilans (une seule fois)
   useEffect(() => {
-    async function load() {
+    async function loadInit() {
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
       if (profileDoc.exists()) setProfile(profileDoc.data());
-      // Charger tous les bilans existants + données de la semaine
       const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
       const bilanSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(20)));
-      const allBilans = bilanSnap.docs.map(d => d.data());
-      setExistingBilans(allBilans);
+      setExistingBilans(bilanSnap.docs.map(d => d.data()));
+    }
+    loadInit();
+  }, [currentUser.uid]);
+
+  // Chargement de la semaine affichée (change quand weekKey change)
+  useEffect(() => {
+    if (!weekKey) return;
+    async function load() {
       const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey));
       // Charger semaine précédente pour les deltas
       const prevWeekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', prevWeekKey));

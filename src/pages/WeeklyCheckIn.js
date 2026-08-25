@@ -64,66 +64,69 @@ export default function WeeklyCheckIn({ coachMode }) {
 
   function set(key, val) { setForm(p => ({ ...p, [key]: val })); }
 
-  // Chargement initial : profil + liste des bilans (une seule fois)
   useEffect(() => {
-    async function loadInit() {
-      const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
-      if (profileDoc.exists()) setProfile(profileDoc.data());
-      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-      const bilanSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(20)));
-      setExistingBilans(bilanSnap.docs.map(d => d.data()));
-    }
-    loadInit();
-  }, [currentUser.uid]);
-
-  // Chargement de la semaine affichée (change quand weekKey change)
-  useEffect(() => {
-    if (!weekKey) return;
     async function load() {
-      const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey));
-      // Charger semaine précédente pour les deltas
-      const prevWeekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', prevWeekKey));
-      if (prevWeekDoc.exists()) setPrevMeasurements(prevWeekDoc.data().measurements || null);
+      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+      // Profil
+      const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+      if (!profileDoc.exists()) { setLoading(false); return; }
+      const p = profileDoc.data();
+      setProfile(p);
+
+      // Charger tous les bilans existants
+      const bilanSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(20)));
+      const allBilans = bilanSnap.docs.map(d => d.data());
+      setExistingBilans(allBilans);
+
+      // Déterminer weekKey selon offset
+      const isNow = weekOffset === 0;
+      const past = weekOffset > 0 ? allBilans[weekOffset - 1] : null;
+      const wKey = isNow ? format(subDays(new Date(), 6), 'yyyy-MM-dd') : (past?.weekStart || format(subDays(new Date(), 6), 'yyyy-MM-dd'));
+      const wEnd = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekEnd || format(new Date(new Date(wKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
+
+      // Bilan de la semaine affichée
+      const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', wKey));
       if (weekDoc.exists()) {
         const d = weekDoc.data();
         setForm({
-          waist: d.measurements?.waist || '',
-          hips: d.measurements?.hips || '',
-          glutes: d.measurements?.glutes || '',
-          thighs: d.measurements?.thighs || '',
-          arms: d.measurements?.arms || '',
-          energy: d.questionnaire?.energy || '',
-          hunger: d.questionnaire?.hunger || '',
-          motivation: d.questionnaire?.motivation || '',
-          stress: d.questionnaire?.stress || '',
-          adherence: d.questionnaire?.adherence || '',
-          weekNotes: d.weekNotes || '',
-          weekHighlight: d.weekHighlight || '',
-          weekDifficulty: d.weekDifficulty || '',
-          avgWeight: d.avgWeight || '',
+          waist: d.measurements?.waist || '', hips: d.measurements?.hips || '',
+          glutes: d.measurements?.glutes || '', thighs: d.measurements?.thighs || '',
+          arms: d.measurements?.arms || '', energy: d.questionnaire?.energy || '',
+          hunger: d.questionnaire?.hunger || '', motivation: d.questionnaire?.motivation || '',
+          stress: d.questionnaire?.stress || '', adherence: d.questionnaire?.adherence || '',
+          weekNotes: d.weekNotes || '', weekHighlight: d.weekHighlight || '',
+          weekDifficulty: d.weekDifficulty || '', avgWeight: d.avgWeight || '',
         });
         if (d.photoURLs) setPhotoURLs(d.photoURLs);
+      } else {
+        setForm({ waist:'', hips:'', glutes:'', thighs:'', arms:'', energy:'', hunger:'', motivation:'', stress:'', adherence:'', weekNotes:'', weekHighlight:'', weekDifficulty:'', avgWeight:'' });
+        setPhotoURLs({ face: null, profile: null, back: null });
       }
 
-      // Calculate week stats from daily entries
-      const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
-      const snap = await getDocs(q);
-      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= weekKey && e.date <= weekEnd);
+      // Stats nutritionnelles
+      const snap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(10)));
+      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= wKey && e.date <= wEnd);
       if (entries.length > 0) {
-        const days = entries.map(e => ({
-          label: format(new Date(e.date), 'EEE', { locale: fr }),
-          calories: e.calories || 0,
-          protein: e.protein || 0,
-          carbs: e.carbs || 0,
-          fat: e.fat || 0,
-        })).reverse();
-        const avg = (key) => Math.round(days.reduce((s, d) => s + d[key], 0) / days.length);
+        const days = entries.map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 })).reverse();
+        const avg = key => Math.round(days.reduce((s,d) => s + d[key], 0) / days.length);
         setWeekStats({ days, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat'), count: days.length });
+      } else {
+        setWeekStats(null);
       }
+
+      // Poids moyen
+      const weightEntries = entries.filter(e => e.weight);
+      setWeightDaysCount(weightEntries.length);
+      if (weightEntries.length > 0 && !weekDoc.exists()) {
+        const avgW = weightEntries.reduce((s,e) => s + e.weight, 0) / weightEntries.length;
+        setForm(prev => ({ ...prev, avgWeight: +avgW.toFixed(1) }));
+      }
+
       setLoading(false);
     }
     load();
-  }, [currentUser.uid, weekOffset, existingBilans.length]);
+  }, [currentUser.uid, weekOffset]);
   async function uploadToCloudinary(file, slot, clientProfile) {
     const lastName = (clientProfile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const firstName = (clientProfile?.firstName || '').toLowerCase().replace(/\s/g, '_');

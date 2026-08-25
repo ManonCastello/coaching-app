@@ -40,6 +40,7 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const existingBilansRef = useRef([]); // ref = pas de re-render
   const [existingBilansLoaded, setExistingBilansLoaded] = useState(false);
+  const [weightDaysCount, setWeightDaysCount] = useState(0);
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 

@@ -123,7 +123,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       setLoading(false);
     }
     load();
-  }, [currentUser.uid, weekKey]);
+  }, [currentUser.uid, weekOffset, existingBilans.length]);
   async function uploadToCloudinary(file, slot, clientProfile) {
     const lastName = (clientProfile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const firstName = (clientProfile?.firstName || '').toLowerCase().replace(/\s/g, '_');

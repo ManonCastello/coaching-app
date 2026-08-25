@@ -38,16 +38,21 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [photoViewer, setPhotoViewer] = useState(null);
   const [profile, setProfile] = useState(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [existingBilans, setExistingBilans] = useState([]); // bilans existants pour navigation
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
-  // weekKey = date d'aujourd'hui - 7j * offset (les 7 derniers jours)
-  const bilanDate = subDays(new Date(), weekOffset * 7);
-  const weekEnd = format(bilanDate, 'yyyy-MM-dd');
-  const weekKey = format(subDays(bilanDate, 6), 'yyyy-MM-dd'); // 7 jours avant
-  const prevWeekKey = format(subDays(bilanDate, 13), 'yyyy-MM-dd');
+  // Pour la semaine en cours : aujourd'hui - 7j → aujourd'hui
+  // Pour les semaines passées : naviguer dans les bilans existants
+  const todayEnd = format(new Date(), 'yyyy-MM-dd');
+  const todayStart = format(subDays(new Date(), 6), 'yyyy-MM-dd');
   const isCurrentWeek = weekOffset === 0;
-  const weekLabel = format(subDays(bilanDate, 6), "d MMM", { locale: fr }) + ' → ' + format(bilanDate, "d MMM yyyy", { locale: fr });
+  // Si on navigue dans les anciens, utiliser la clé du bilan existant
+  const pastBilan = weekOffset > 0 ? existingBilans[weekOffset - 1] : null;
+  const weekEnd = isCurrentWeek ? todayEnd : (pastBilan?.weekEnd || format(new Date(new Date(pastBilan?.weekStart || todayEnd).getTime() + 6*86400000), 'yyyy-MM-dd'));
+  const weekKey = isCurrentWeek ? todayStart : (pastBilan?.weekStart || todayStart);
+  const prevWeekKey = '';
+  const weekLabel = format(new Date(weekKey), "d MMM", { locale: fr }) + ' → ' + format(new Date(weekEnd), "d MMM yyyy", { locale: fr });
   const [prevMeasurements, setPrevMeasurements] = useState(null);
 
   const [form, setForm] = useState({
@@ -63,6 +68,11 @@ export default function WeeklyCheckIn({ coachMode }) {
     async function load() {
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
       if (profileDoc.exists()) setProfile(profileDoc.data());
+      // Charger tous les bilans existants + données de la semaine
+      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const bilanSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(20)));
+      const allBilans = bilanSnap.docs.map(d => d.data());
+      setExistingBilans(allBilans);
       const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey));
       // Charger semaine précédente pour les deltas
       const prevWeekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', prevWeekKey));
@@ -89,7 +99,6 @@ export default function WeeklyCheckIn({ coachMode }) {
       }
 
       // Calculate week stats from daily entries
-      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
       const q = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
       const snap = await getDocs(q);
       const entries = snap.docs.map(d => d.data()).filter(e => e.date >= weekKey && e.date <= weekEnd);
@@ -194,7 +203,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       <div className="top-nav">
         <Link to={backUrl} style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => setWeekOffset(w => w + 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
+          <button onClick={() => setWeekOffset(w => Math.min(w + 1, existingBilans.length))} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
           <div style={{ textAlign: 'center' }}>
             <div className="top-nav-title" style={{ fontSize: 13 }}>{isCurrentWeek ? 'Cette semaine' : weekLabel}</div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{weekLabel}</div>

@@ -50,7 +50,7 @@ export default function WeeklyCheckIn({ coachMode }) {
   const todayStart = format(subDays(new Date(), 6), 'yyyy-MM-dd');
   const isCurrentWeek = weekOffset === 0;
   // Si on navigue dans les anciens, utiliser la clé du bilan existant
-  const pastBilan = weekOffset > 0 ? existingBilans[weekOffset - 1] : null;
+  const pastBilan = weekOffset > 0 ? existingBilansRef.current[weekOffset - 1] : null;
   const weekEnd = isCurrentWeek ? todayEnd : (pastBilan?.weekEnd || format(new Date(new Date(pastBilan?.weekStart || todayEnd).getTime() + 6*86400000), 'yyyy-MM-dd'));
   const weekKey = isCurrentWeek ? todayStart : (pastBilan?.weekStart || todayStart);
   const prevWeekKey = '';

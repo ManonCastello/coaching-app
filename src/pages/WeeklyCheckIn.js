@@ -38,7 +38,8 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [photoViewer, setPhotoViewer] = useState(null);
   const [profile, setProfile] = useState(null);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [existingBilans, setExistingBilans] = useState([]); // bilans existants pour navigation
+  const existingBilansRef = useRef([]); // ref = pas de re-render
+  const [existingBilansLoaded, setExistingBilansLoaded] = useState(false);
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
@@ -77,7 +78,8 @@ export default function WeeklyCheckIn({ coachMode }) {
       // Charger tous les bilans existants
       const bilanSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(20)));
       const allBilans = bilanSnap.docs.map(d => d.data());
-      setExistingBilans(allBilans);
+      existingBilansRef.current = allBilans;
+      setExistingBilansLoaded(true); // trigger une seule fois
 
       // Déterminer weekKey selon offset
       const isNow = weekOffset === 0;
@@ -126,7 +128,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       setLoading(false);
     }
     load();
-  }, [currentUser.uid, weekOffset]);
+  }, [currentUser.uid, weekOffset, existingBilansLoaded]);
   async function uploadToCloudinary(file, slot, clientProfile) {
     const lastName = (clientProfile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const firstName = (clientProfile?.firstName || '').toLowerCase().replace(/\s/g, '_');
@@ -213,7 +215,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       <div className="top-nav">
         <Link to={backUrl} style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => setWeekOffset(w => Math.min(w + 1, existingBilans.length))} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
+          <button onClick={() => setWeekOffset(w => Math.min(w + 1, existingBilansRef.current.length))} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
           <div style={{ textAlign: 'center' }}>
             <div className="top-nav-title" style={{ fontSize: 13 }}>{isCurrentWeek ? 'Cette semaine' : weekLabel}</div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{weekLabel}</div>

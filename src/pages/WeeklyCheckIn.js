@@ -34,7 +34,8 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [saving, setSaving] = useState(false);
   const [weekStats, setWeekStats] = useState(null);
   const [saved, setSaved] = useState(false);
-  const [uploadingSlot, setUploadingSlot] = useState(null);
+  const [uploadingSlots, setUploadingSlots] = useState(new Set());
+  const uploadingSlot = uploadingSlots.size > 0 ? [...uploadingSlots][0] : null;
   const [photoViewer, setPhotoViewer] = useState(null);
   const [profile, setProfile] = useState(null);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -153,24 +154,47 @@ export default function WeeklyCheckIn({ coachMode }) {
     throw new Error('Upload failed');
   }
 
+  async function compressImage(file, maxSizeMB = 1) {
+    return new Promise(resolve => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        const maxPx = 1600;
+        if (w > maxPx || h > maxPx) {
+          if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+          else { w = Math.round(w * maxPx / h); h = maxPx; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.82);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    });
+  }
+
   async function handlePhotoSelect(slot, file) {
     if (!file) return;
-    // Show preview immediately
+    // Preview immédiat
     const reader = new FileReader();
     reader.onload = e => setPhotoURLs(p => ({ ...p, [slot]: e.target.result }));
     reader.readAsDataURL(file);
 
-    // Upload to Cloudinary
-    setUploadingSlot(slot);
+    // Upload Cloudinary avec compression
+    setUploadingSlots(prev => new Set([...prev, slot]));
     try {
+      const compressed = await compressImage(file);
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
       const profile = profileDoc.exists() ? profileDoc.data() : {};
-      const url = await uploadToCloudinary(file, slot, profile);
+      const url = await uploadToCloudinary(compressed, slot, profile);
       setPhotoURLs(p => ({ ...p, [slot]: url }));
     } catch (e) {
       console.error('Upload error', e);
+      alert('Erreur upload photo. Réessaie ou passe à une photo plus légère.');
     }
-    setUploadingSlot(null);
+    setUploadingSlots(prev => { const s = new Set(prev); s.delete(slot); return s; });
   }
 
   async function handleSave() {
@@ -308,7 +332,7 @@ export default function WeeklyCheckIn({ coachMode }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: uploadingSlot ? 'wait' : 'pointer', overflow: 'hidden',
                   }}>
-                  {uploadingSlot === slot.key ? (
+                  {uploadingSlots.has(slot.key) ? (
                     <div style={{ textAlign: 'center' }}>
                       <div className="spinner" style={{ width: 24, height: 24, margin: '0 auto' }} />
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Upload...</div>

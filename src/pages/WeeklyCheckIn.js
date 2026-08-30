@@ -174,10 +174,19 @@ export default function WeeklyCheckIn({ coachMode }) {
   }
 
   async function handleSave() {
+    if (uploadingSlot) {
+      alert('Une photo est encore en cours d\'upload, attends quelques secondes.');
+      return;
+    }
     setSaving(true);
     try {
       const saveKey = currentWeekKey || weekKey;
       const saveEnd = currentWeekEnd || weekEnd;
+      // Filtrer les URLs non-Cloudinary (base64 preview, blob...)
+      const safePhotoURLs = {};
+      Object.entries(photoURLs).forEach(([k, v]) => {
+        if (v && v.startsWith('https://')) safePhotoURLs[k] = v;
+      });
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', saveKey), {
         weekStart: saveKey,
         weekEnd: saveEnd,
@@ -197,7 +206,7 @@ export default function WeeklyCheckIn({ coachMode }) {
           stress: form.stress ? +form.stress : null,
           adherence: form.adherence ? +form.adherence : null,
         },
-        photoURLs,
+        photoURLs: safePhotoURLs,
         weekNotes: form.weekNotes,
         weekHighlight: form.weekHighlight,
         weekDifficulty: form.weekDifficulty,

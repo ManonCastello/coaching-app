@@ -41,6 +41,8 @@ export default function WeeklyCheckIn({ coachMode }) {
   const existingBilansRef = useRef([]); // ref = pas de re-render
   const [existingBilansLoaded, setExistingBilansLoaded] = useState(false);
   const [weightDaysCount, setWeightDaysCount] = useState(0);
+  const [currentWeekKey, setCurrentWeekKey] = useState('');
+  const [currentWeekEnd, setCurrentWeekEnd] = useState('');
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
@@ -87,6 +89,8 @@ export default function WeeklyCheckIn({ coachMode }) {
       const past = weekOffset > 0 ? allBilans[weekOffset - 1] : null;
       const wKey = isNow ? format(subDays(new Date(), 6), 'yyyy-MM-dd') : (past?.weekStart || format(subDays(new Date(), 6), 'yyyy-MM-dd'));
       const wEnd = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekEnd || format(new Date(new Date(wKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
+      setCurrentWeekKey(wKey);
+      setCurrentWeekEnd(wEnd);
 
       // Bilan de la semaine affichée
       const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', wKey));
@@ -172,9 +176,11 @@ export default function WeeklyCheckIn({ coachMode }) {
   async function handleSave() {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey), {
-        weekStart: weekKey,
-        weekEnd: weekEnd,
+      const saveKey = currentWeekKey || weekKey;
+      const saveEnd = currentWeekEnd || weekEnd;
+      await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', saveKey), {
+        weekStart: saveKey,
+        weekEnd: saveEnd,
         bilanDate: format(new Date(), 'yyyy-MM-dd'),
         avgWeight: form.avgWeight ? +form.avgWeight : null,
         measurements: {

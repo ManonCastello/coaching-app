@@ -49,15 +49,16 @@ export default function WeeklyCheckIn({ coachMode }) {
 
   // Pour la semaine en cours : aujourd'hui - 7j → aujourd'hui
   // Pour les semaines passées : naviguer dans les bilans existants
-  const todayEnd = format(new Date(), 'yyyy-MM-dd');
-  const todayStart = format(subDays(new Date(), 6), 'yyyy-MM-dd');
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
   const isCurrentWeek = weekOffset === 0;
-  // Si on navigue dans les anciens, utiliser la clé du bilan existant
+  // Navigation : semaine en cours = aujourd'hui, passées = bilans existants
   const pastBilan = weekOffset > 0 ? existingBilansRef.current[weekOffset - 1] : null;
-  const weekEnd = isCurrentWeek ? todayEnd : (pastBilan?.weekEnd || format(new Date(new Date(pastBilan?.weekStart || todayEnd).getTime() + 6*86400000), 'yyyy-MM-dd'));
-  const weekKey = isCurrentWeek ? todayStart : (pastBilan?.weekStart || todayStart);
+  // weekKey = date de saisie (aujourd'hui pour le nouveau, date du bilan existant pour les anciens)
+  const weekKey = isCurrentWeek ? todayStr : (pastBilan?.weekKey || pastBilan?.weekStart || todayStr);
+  const weekStart = isCurrentWeek ? format(subDays(new Date(), 6), 'yyyy-MM-dd') : (pastBilan?.weekStart || weekKey);
+  const weekEnd = isCurrentWeek ? todayStr : (pastBilan?.weekEnd || format(new Date(new Date(weekKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
   const prevWeekKey = '';
-  const weekLabel = format(new Date(weekKey), "d MMM", { locale: fr }) + ' → ' + format(new Date(weekEnd), "d MMM yyyy", { locale: fr });
+  const weekLabel = format(new Date(weekStart), "d MMM", { locale: fr }) + ' → ' + format(new Date(weekEnd), "d MMM yyyy", { locale: fr });
   const [prevMeasurements, setPrevMeasurements] = useState(null);
 
   const [form, setForm] = useState({
@@ -88,7 +89,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       // Déterminer weekKey selon offset
       const isNow = weekOffset === 0;
       const past = weekOffset > 0 ? allBilans[weekOffset - 1] : null;
-      const wKey = isNow ? format(subDays(new Date(), 6), 'yyyy-MM-dd') : (past?.weekStart || format(subDays(new Date(), 6), 'yyyy-MM-dd'));
+      const wKey = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekKey || past?.weekStart || format(new Date(), 'yyyy-MM-dd'));
       const wEnd = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekEnd || format(new Date(new Date(wKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
       setCurrentWeekKey(wKey);
       setCurrentWeekEnd(wEnd);
@@ -114,7 +115,10 @@ export default function WeeklyCheckIn({ coachMode }) {
 
       // Stats nutritionnelles
       const snap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(10)));
-      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= wKey && e.date <= wEnd);
+      // Exclure le jour J (bilan fait le matin, journée pas terminée)
+      const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+      const wStart7 = format(subDays(new Date(wEnd), 6), 'yyyy-MM-dd');
+      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= wStart7 && e.date <= (isNow ? yesterday : wEnd));
       if (entries.length > 0) {
         const days = entries.map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 })).reverse();
         const avg = key => Math.round(days.reduce((s,d) => s + d[key], 0) / days.length);
@@ -212,7 +216,8 @@ export default function WeeklyCheckIn({ coachMode }) {
         if (v && v.startsWith('https://')) safePhotoURLs[k] = v;
       });
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', saveKey), {
-        weekStart: saveKey,
+        weekKey: saveKey,
+        weekStart: weekStart,
         weekEnd: saveEnd,
         bilanDate: format(new Date(), 'yyyy-MM-dd'),
         avgWeight: form.avgWeight ? +form.avgWeight : null,

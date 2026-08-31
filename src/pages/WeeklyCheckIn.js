@@ -324,13 +324,13 @@ export default function WeeklyCheckIn({ coachMode }) {
             {PHOTO_SLOTS.map(slot => (
               <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <div
-                  onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()}
+                  onClick={() => !uploadingSlots.has(slot.key) && fileRefs[slot.key].current.click()}
                   style={{
                     width: '100%', aspectRatio: '3/4', borderRadius: 'var(--radius-sm)',
                     border: `2px dashed ${photoURLs[slot.key] ? 'var(--primary)' : 'var(--border)'}`,
                     background: photoURLs[slot.key] ? 'transparent' : 'var(--bg)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: uploadingSlot ? 'wait' : 'pointer', overflow: 'hidden',
+                    cursor: uploadingSlots.has(slot.key) ? 'wait' : 'pointer', overflow: 'hidden',
                   }}>
                   {uploadingSlots.has(slot.key) ? (
                     <div style={{ textAlign: 'center' }}>
@@ -350,7 +350,7 @@ export default function WeeklyCheckIn({ coachMode }) {
                   ref={fileRefs[slot.key]}
                   type="file" accept="image/*"
                   style={{ display: 'none' }}
-                  onChange={e => handlePhotoSelect(slot.key, e.target.files[0])}
+                  onChange={e => { handlePhotoSelect(slot.key, e.target.files[0]); e.target.value = ''; }}
                 />
                 <span style={{ fontSize: 11, color: photoURLs[slot.key] ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
                   {photoURLs[slot.key] ? '✅ ' : ''}{slot.label}

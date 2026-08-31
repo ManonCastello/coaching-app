@@ -274,7 +274,7 @@ export default function CoachClientDetail() {
     const CLOUD = 'dduaqnygn'; const PRESET = 'fitlog_photos';
     const ln = (client?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const fn = (client?.firstName || '').toLowerCase().replace(/\s/g, '_');
-    const publicId = `fitlog/start/${fn}_${ln}_start_${slot}`;
+    const publicId = `fitlog/start/${fn}_${ln}_start_${slot}_${Date.now()}`;
     const formData = new FormData();
     formData.append('file', file); formData.append('upload_preset', PRESET); formData.append('public_id', publicId);
     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, { method: 'POST', body: formData });
@@ -891,7 +891,7 @@ export default function CoachClientDetail() {
                            : startPhotos[slot.key] ? <img src={startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                            : <div style={{ textAlign: 'center' }}><div style={{ fontSize: 24, color: 'var(--text-light)' }}>+</div><div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</div></div>}
                         </div>
-                        <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleStartPhotoSelect(slot.key, e.target.files[0])} />
+                        <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { handleStartPhotoSelect(slot.key, e.target.files[0]); e.target.value = ''; }} />
                         <span style={{ fontSize: 11, color: startPhotos[slot.key] ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>{startPhotos[slot.key] ? '✅ ' : ''}{slot.label}</span>
                       </div>
                     ))}

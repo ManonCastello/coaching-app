@@ -142,7 +142,7 @@ export default function WeeklyCheckIn({ coachMode }) {
   async function uploadToCloudinary(file, slot, clientProfile) {
     const lastName = (clientProfile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const firstName = (clientProfile?.firstName || '').toLowerCase().replace(/\s/g, '_');
-    const publicId = `fitlog/${currentUser.uid}/${weekKey}_${lastName}_${firstName}_${slot}`;
+    const publicId = `fitlog/${currentUser.uid}/${weekKey}_${lastName}_${firstName}_${slot}_${Date.now()}`;
 
     const formData = new FormData();
     formData.append('file', file);

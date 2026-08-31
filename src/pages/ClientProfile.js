@@ -79,7 +79,7 @@ export default function ClientProfile() {
   async function uploadStartPhoto(file, slot) {
     const ln = (profile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const fn = (profile?.firstName || '').toLowerCase().replace(/\s/g, '_');
-    const publicId = `fitlog/start/${fn}_${ln}_start_${slot}`;
+    const publicId = `fitlog/start/${fn}_${ln}_start_${slot}_${Date.now()}`;
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_PRESET);
@@ -369,7 +369,7 @@ export default function ClientProfile() {
                         </div>
                       )}
                     </div>
-                    <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleStartPhotoSelect(slot.key, e.target.files[0])} />
+                    <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { handleStartPhotoSelect(slot.key, e.target.files[0]); e.target.value = ''; }} />
                     <span style={{ fontSize: 11, color: startPhotos[slot.key] ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
                       {startPhotos[slot.key] ? '✅ ' : ''}{slot.label}
                     </span>

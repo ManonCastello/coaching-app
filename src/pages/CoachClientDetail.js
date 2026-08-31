@@ -212,34 +212,19 @@ export default function CoachClientDetail() {
   }
 
   async function resetWeekBalance() {
-    const { format, startOfWeek } = await import('date-fns');
-    const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    // Load current entries to calculate current balance
-    const { collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } = await import('firebase/firestore');
-    const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(7));
+    if (!window.confirm('Remettre la balance à zéro ?')) return;
+    const { collection, query, orderBy, limit, getDocs, doc: d, setDoc: sd, serverTimestamp: st } = await import('firebase/firestore');
+    const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(14));
     const snap = await getDocs(q);
-    const entries = snap.docs.map(d => d.data());
-    const t = client.targets || {};
-    let totalDiff = 0;
-    entries.forEach(e => {
-      if (e.date >= weekKey && e.calories) {
-        let target;
-        if (e.locked && e.dailyTarget != null) {
-          target = e.dailyTarget;
-        } else {
-          const stepBonus = Math.round(((e.steps || 0) - (t.steps || 10000)) / 1000 * (t.kcalPer1000Steps || 20));
-          const sessionDef = e.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
-          const extraCal = e.extraActivityCal ? +e.extraActivityCal : 0;
-          target = (t.calories || 2000) + stepBonus + extraCal + sessionDef;
-        }
-        totalDiff += (e.calories - target);
-      }
-    });
-    // Store negative offset to zero it out
-    await setDoc(doc(db, 'clients', clientId, 'weekResets', weekKey), {
-      offset: -Math.round(totalDiff),
-      resetAt: serverTimestamp(),
-    });
+    const today = new Date().toISOString().split('T')[0];
+    const entries = snap.docs.map(doc => ({ ref: doc.ref, ...doc.data() }));
+    const lastLocked = entries.find(e => e.locked && e.date !== today);
+    if (!lastLocked) {
+      alert('Aucun jour verrouillé trouvé.');
+      return;
+    }
+    await sd(lastLocked.ref, { dailyBalance: 0 }, { merge: true });
+    setEntries(prev => prev.map(e => e.date === lastLocked.date ? { ...e, dailyBalance: 0 } : e));
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 

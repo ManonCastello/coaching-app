@@ -97,11 +97,10 @@ export default function DailyCheckIn({ coachMode }) {
         setGoalChecks({});
       }
 
-      // Balance = dailyBalance du dernier jour verrouillé (contient déjà le cumul)
+      // Balance = dailyBalance du dernier jour verrouillé AVANT targetDate
       if (profileData?.coachingMode !== 'intuitif') {
-        const today = format(new Date(), 'yyyy-MM-dd');
         const entriesSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(14)));
-        const entries = entriesSnap.docs.map(d => d.data()).filter(e => e.date !== today);
+        const entries = entriesSnap.docs.map(d => d.data()).filter(e => e.date < targetDate);
         const lastLocked = entries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
         setWeekBalance(lastLocked ? Math.round(lastLocked.dailyBalance) : 0);
       }

@@ -143,6 +143,8 @@ export default function DailyCheckIn({ coachMode }) {
       lockedAt: serverTimestamp(),
     }, { merge: true });
     setIsLocked(true);
+    // Mettre à jour weekBalance pour les verrouillages suivants dans la même session
+    if (dailyBalance !== null) setWeekBalance(Math.round(dailyBalance));
   }
 
   async function handleSave() {

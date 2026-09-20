@@ -1111,8 +1111,9 @@ export default function CoachClientDetail() {
                     onClick={async () => {
                       const { doc: d, setDoc: sd } = await import('firebase/firestore');
                       const newStatus = w.coachStatus === 'done' ? 'pending' : 'done';
-                      await sd(d(db, 'clients', clientId, 'weeklyEntries', w.weekStart), { coachStatus: newStatus }, { merge: true });
-                      setWeeklyEntries(prev => prev.map(e => e.weekStart === w.weekStart ? { ...e, coachStatus: newStatus } : e));
+                      const docKey = w.weekKey || w.weekStart;
+                      await sd(d(db, 'clients', clientId, 'weeklyEntries', docKey), { coachStatus: newStatus }, { merge: true });
+                      setWeeklyEntries(prev => prev.map(e => (e.weekKey || e.weekStart) === docKey ? { ...e, coachStatus: newStatus } : e));
                     }}
                     style={{
                       padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12,
@@ -1215,8 +1216,9 @@ export default function CoachClientDetail() {
                         <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditingCoachComment(null)}>Annuler</button>
                         <button className="btn btn-primary" style={{ flex: 1 }} onClick={async () => {
                           const { doc: d, setDoc: sd } = await import('firebase/firestore');
-                          await sd(d(db, 'clients', clientId, 'weeklyEntries', w.weekStart), { coachComment: coachCommentForm }, { merge: true });
-                          setWeeklyEntries(prev => prev.map(e => e.weekStart === w.weekStart ? { ...e, coachComment: coachCommentForm } : e));
+                          const docKey2 = w.weekKey || w.weekStart;
+                          await sd(d(db, 'clients', clientId, 'weeklyEntries', docKey2), { coachComment: coachCommentForm }, { merge: true });
+                          setWeeklyEntries(prev => prev.map(e => (e.weekKey || e.weekStart) === docKey2 ? { ...e, coachComment: coachCommentForm } : e));
                           setEditingCoachComment(null);
                         }}>✅ Enregistrer</button>
                       </div>

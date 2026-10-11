@@ -2,21 +2,23 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS } from '../utils/calculations';
 import PhotoViewer from '../components/PhotoViewer';
-import { readWeeklyEntries } from '../utils/weeklyEntries';
+import { summarizeWeeklyDays } from '../utils/weeklyEntries';
+import useWeeklyEntries from '../hooks/useWeeklyEntries';
 
 export default function CoachClientDetail() {
   const { clientId } = useParams();
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [entries, setEntries] = useState([]);
-  const [weeklyEntries, setWeeklyEntries] = useState([]);
-  const [weeklyError, setWeeklyError] = useState('');
+  const { entries: weeklyEntries, setEntries: setWeeklyEntries, error: weeklyError,
+    loading: weeklyLoading, refreshing: weeklyRefreshing, source: weeklySource,
+    syncedAt: weeklySyncedAt, refresh: refreshWeekly } = useWeeklyEntries(clientId);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [editTargets, setEditTargets] = useState(false);
@@ -128,18 +130,6 @@ export default function CoachClientDetail() {
       }
     }
     load();
-  }, [clientId]);
-
-  useEffect(() => {
-    setWeeklyEntries([]);
-    setWeeklyError('');
-    return onSnapshot(collection(db, 'clients', clientId, 'weeklyEntries'), snapshot => {
-      setWeeklyEntries(readWeeklyEntries(snapshot, 12));
-      setWeeklyError('');
-    }, error => {
-      console.error('Impossible de charger les bilans', error);
-      setWeeklyError('Impossible de charger les bilans. Vérifie ta connexion et tes droits d’accès, puis recharge la fiche.');
-    });
   }, [clientId]);
 
   async function saveTargets() {
@@ -546,8 +536,8 @@ export default function CoachClientDetail() {
                   📈 Entre les bilans
                   <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
                     {prevWeekly
-                      && prevWeekly.weekStart && latestWeekly.weekStart
-                      ? format(new Date(prevWeekly.weekStart), "d MMM", { locale: fr }) + ' → ' + format(new Date(latestWeekly.weekStart), "d MMM", { locale: fr })
+                      && prevWeekly.bilanDate && latestWeekly.bilanDate
+                      ? format(new Date(prevWeekly.bilanDate), "d MMM", { locale: fr }) + ' → ' + format(new Date(latestWeekly.bilanDate), "d MMM", { locale: fr })
                       : 'depuis le début'}
                   </span>
                 </div>
@@ -1083,8 +1073,23 @@ export default function CoachClientDetail() {
         {/* BILANS */}
         {activeTab === 'bilans' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div role="status" style={{ fontSize: 13 }}>
+                <strong>Bilans · version du 11 octobre 2026 · v2</strong>
+                <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                  {weeklyRefreshing ? 'Synchronisation en cours…' : weeklySource === 'server'
+                    ? `Synchronisé à ${weeklySyncedAt?.toLocaleTimeString('fr-FR')} · ${weeklyEntries.length} bilan(s)`
+                    : weeklySource === 'cache' ? 'Copie locale affichée. Synchronisation non confirmée.' : 'Chargement des bilans…'}
+                </div>
+              </div>
+              <button className="btn btn-secondary btn-sm" disabled={weeklyRefreshing} onClick={refreshWeekly} style={{ width: 'auto' }}>
+                {weeklyRefreshing ? 'Actualisation…' : 'Actualiser les bilans'}
+              </button>
+            </div>
             {loadError && <div className="card" role="alert">{loadError}</div>}
             {weeklyError && <div className="card" role="alert">{weeklyError}</div>}
+            {!weeklyLoading && !weeklyEntries.length && !weeklyError && weeklySource === 'server' &&
+              <div className="card">Aucun bilan enregistré pour ce client.</div>}
             {/* Mensurations de départ pour référence */}
             {client.startMeasurements && (
               <div className="card" style={{ background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)' }}>
@@ -1118,11 +1123,9 @@ export default function CoachClientDetail() {
               // Calculer stats depuis entries chargées si weekStats absent
               const wStart = w.weekStart;
               const wEnd = w.weekEnd;
-              const wDays = entries.filter(e => e.date >= wStart && e.date <= wEnd && e.calories > 0)
-                .map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0 }));
-              const avg = key => wDays.length ? Math.round(entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).reduce((s,e) => s + (e[key]||0), 0) / (entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).length || 1)) : 0;
-              const computedStats = wDays.length > 0 ? { days: wDays, count: wDays.length, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat') } : null;
-              const statsToShow = w.weekStats?.days ? w.weekStats : computedStats;
+              const wDays = entries.filter(e => wStart && wEnd && e.date >= wStart && e.date <= wEnd)
+                .map(e => ({ ...e, label: format(new Date(e.date), 'EEE', { locale: fr }) }));
+              const statsToShow = summarizeWeeklyDays(w.weekStats?.days || wDays);
               return (
               <div key={w.id} className="card">
                 {/* Header avec statut */}
@@ -1202,6 +1205,9 @@ export default function CoachClientDetail() {
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
                       📊 Résumé nutritionnel · {statsToShow.count} jour{statsToShow.count > 1 ? 's' : ''}
                     </div>
+                    {statsToShow.incompleteCount > 0 && <p style={{ fontSize: 12, color: 'var(--warning)' }}>
+                      {statsToShow.incompleteCount} journée(s) avec calories non renseignées, exclue(s) des moyennes.
+                    </p>}
                     <ResponsiveContainer width="100%" height={90}>
                       <BarChart data={statsToShow.days} barSize={14}>
                         <XAxis dataKey="label" tick={{ fontSize: 9 }} />
@@ -1217,7 +1223,7 @@ export default function CoachClientDetail() {
                         { label: '🥑 Lip.', val: statsToShow.avgFat, color: '#7C3AED' },
                       ].map(m => (
                         <div key={m.label} style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {m.label} <strong style={{ color: m.color }}>{m.val}</strong>
+                          {m.label} <strong style={{ color: m.color }}>{m.val ?? 'Non renseigné'}</strong>
                         </div>
                       ))}
                     </div>

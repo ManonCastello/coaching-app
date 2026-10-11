@@ -9,6 +9,7 @@ import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import CoachToggle from '../components/CoachToggle';
+import useWeeklyEntries from '../hooks/useWeeklyEntries';
 
 function Delta({ value, unit = '', reverse = false }) {
   if (value === null || value === undefined || isNaN(value)) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
@@ -21,7 +22,7 @@ export default function ProgressPage() {
   const { currentUser, userRole, coachMode, switchMode } = useAuth();
   const [profile, setProfile] = useState(null);
   const [dailyEntries, setDailyEntries] = useState([]);
-  const [weeklyEntries, setWeeklyEntries] = useState([]);
+  const { entries: weeklyEntries, error: weeklyError, loading: weeklyLoading } = useWeeklyEntries(currentUser.uid);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,9 +32,6 @@ export default function ProgressPage() {
       const dq = query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'asc'), limit(90));
       const dsnap = await getDocs(dq);
       setDailyEntries(dsnap.docs.map(d => d.data()));
-      const wq = query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'asc'), limit(16));
-      const wsnap = await getDocs(wq);
-      setWeeklyEntries(wsnap.docs.map(d => d.data()));
       setLoading(false);
     }
     load();
@@ -51,7 +49,7 @@ export default function ProgressPage() {
 
   // ── Moyenne poids de la semaine (depuis le dernier bilan) ──
   const lastBilan = weeklyEntries.length > 0 ? weeklyEntries[weeklyEntries.length - 1] : null;
-  const lastBilanDate = lastBilan?.weekStart || null;
+  const lastBilanDate = lastBilan?.bilanDate || null;
   const weekWeights = dailyEntries.filter(e => e.weight && (!lastBilanDate || e.date >= lastBilanDate));
   const avgWeightSinceBilan = weekWeights.length > 0
     ? +(weekWeights.reduce((s, e) => s + e.weight, 0) / weekWeights.length).toFixed(1)
@@ -101,6 +99,8 @@ export default function ProgressPage() {
       </div>
 
       <div className="page">
+        {weeklyError && <div className="card" role="alert">{weeklyError}</div>}
+        {weeklyLoading && <p role="status">Chargement des bilans…</p>}
 
         {/* ── CHIFFRES CLÉS ── */}
         <h2 className="section-title">Chiffres clés</h2>
@@ -141,7 +141,7 @@ export default function ProgressPage() {
           <>
             <h2 className="section-title">
               Entre les bilans
-              {prevBilan ? ` (${format(new Date(prevBilan.weekStart), 'd MMM', { locale: fr })} → ${format(new Date(lastBilan.weekStart), 'd MMM', { locale: fr })})` : ' (depuis le début)'}
+              {prevBilan?.bilanDate && lastBilan?.bilanDate ? ` (${format(new Date(prevBilan.bilanDate), 'd MMM', { locale: fr })} → ${format(new Date(lastBilan.bilanDate), 'd MMM', { locale: fr })})` : ' (depuis le début)'}
             </h2>
             <div className="card" style={{ marginBottom: 20 }}>
               {/* Poids */}
@@ -231,11 +231,11 @@ export default function ProgressPage() {
             <h2 className="section-title">Journal des bilans</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
               {[...weeklyEntries].reverse().map(w => (
-                <div key={w.weekStart} className="card">
+                <div key={w.id} className="card">
                   {/* Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>
-                      Semaine du {format(new Date(w.weekStart), 'd MMM yyyy', { locale: fr })}
+                      Bilan {w.bilanDate ? `du ${format(new Date(w.bilanDate), 'd MMM yyyy', { locale: fr })}` : '(date non renseignée)'}
                       {w.avgWeight && <span style={{ marginLeft: 8, fontSize: 12, background: 'var(--primary-bg)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 100, fontWeight: 700 }}>{w.avgWeight} kg</span>}
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: w.coachStatus === 'done' ? 'var(--success-light)' : 'var(--warning-light)', color: w.coachStatus === 'done' ? 'var(--success)' : 'var(--warning)' }}>

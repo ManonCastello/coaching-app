@@ -4,11 +4,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, getDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
-import { format, getDay, startOfWeek, subDays } from 'date-fns';
+import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
+import useWeeklyEntries from '../hooks/useWeeklyEntries';
+import { wasSubmittedToday } from '../utils/weeklyEntries';
 
 export default function ClientDashboard() {
   const { currentUser, logout, userRole, coachMode, switchMode } = useAuth();
@@ -16,9 +18,7 @@ export default function ClientDashboard() {
   const [profile, setProfile] = useState(null);
   const [todayEntry, setTodayEntry] = useState(null);
   const [recentEntries, setRecentEntries] = useState([]);
-  const [weeklyToday, setWeeklyToday] = useState(false);
   const [weekBalance, setWeekBalance] = useState(null);
-  const [lastWeeklyEntry, setLastWeeklyEntry] = useState(null);
   const [weekGoals, setWeekGoals] = useState(null);
   const [todayGoalChecks, setTodayGoalChecks] = useState(null);
   const [allEntries, setAllEntries] = useState([]);
@@ -27,8 +27,9 @@ export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState('today');
 
   const today = format(new Date(), 'yyyy-MM-dd');
+  const { entries: bilans, error: bilanError, source: bilanSource } = useWeeklyEntries(currentUser.uid);
+  const submittedToday = wasSubmittedToday(bilans, today);
   const todayLabel = format(new Date(), "EEEE d MMMM yyyy", { locale: fr });
-  const todayDayOfWeek = getDay(new Date());
   const weekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
   async function loadData() {
@@ -38,18 +39,13 @@ export default function ClientDashboard() {
       const p = profileDoc.data();
       setProfile(p);
 
-      const [weekDoc, todayDoc, entriesSnap, resetDoc, weeklySnap, wgSnap] = await Promise.all([
-        (p.weeklyBilanDay !== undefined && p.weeklyBilanDay === todayDayOfWeek)
-          ? getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', weekKey))
-          : Promise.resolve(null),
+      const [todayDoc, entriesSnap, resetDoc, wgSnap] = await Promise.all([
         getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', today)),
         getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(90))),
         getDoc(doc(db, 'clients', currentUser.uid, 'weekResets', weekKey)),
-        getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(1))),
         getDocs(query(collection(db, 'clients', currentUser.uid, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1))),
       ]);
 
-      if (weekDoc && !weekDoc.exists()) setWeeklyToday(true);
       if (todayDoc.exists()) {
         setTodayEntry(todayDoc.data());
         setTodayGoalChecks(todayDoc.data().goalChecks || null);
@@ -59,7 +55,6 @@ export default function ClientDashboard() {
       setAllEntries(entries);
       setRecentEntries([...entries].slice(0, 7).reverse());
 
-      if (!weeklySnap.empty) setLastWeeklyEntry(weeklySnap.docs[0].data());
       if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
@@ -131,12 +126,18 @@ export default function ClientDashboard() {
         <div style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', borderRadius: 'var(--radius)', padding: '16px 20px', marginBottom: 16, color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={{ fontSize: 12, opacity: 0.85, marginBottom: 2 }}>📋 Bilan des 7 derniers jours</p>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>Bilan hebdomadaire</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>
+              {submittedToday ? 'Bilan envoyé aujourd’hui ✅' : 'Bilan hebdomadaire'}
+            </div>
+            {submittedToday && <p style={{ fontSize: 12, marginTop: 4 }}>
+              {bilanSource === 'server' ? 'Enregistrement confirmé.' : 'Enregistrement en cours de vérification.'}
+            </p>}
           </div>
           <Link to="/checkin/weekly" style={{ textDecoration: 'none' }}>
-            <button style={{ background: 'white', color: '#D97706', border: 'none', borderRadius: 'var(--radius-full)', padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 13 }}>Remplir →</button>
+            <button style={{ background: 'white', color: '#D97706', border: 'none', borderRadius: 'var(--radius-full)', padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 13 }}>{submittedToday ? 'Consulter →' : 'Remplir →'}</button>
           </Link>
         </div>
+        {bilanError && <div className="card" role="alert">{bilanError}</div>}
         {!todayEntry && (
           <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderRadius: 'var(--radius)', padding: '20px', marginBottom: 16, color: 'white', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'relative', zIndex: 1 }}>

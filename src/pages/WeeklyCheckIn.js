@@ -3,13 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { format, startOfWeek, subDays } from 'date-fns';
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocsFromServer } from 'firebase/firestore';
+import { format, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, Cell } from 'recharts';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import PhotoViewer from '../components/PhotoViewer';
-import { readWeeklyEntries } from '../utils/weeklyEntries';
+import { readWeeklyEntries, summarizeWeeklyDays } from '../utils/weeklyEntries';
 
 const CLOUDINARY_CLOUD = 'dduaqnygn';
 const CLOUDINARY_PRESET = 'fitlog_photos';
@@ -42,14 +42,14 @@ export default function WeeklyCheckIn({ coachMode }) {
   const [profile, setProfile] = useState(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const existingBilansRef = useRef([]); // ref = pas de re-render
-  const [existingBilansLoaded, setExistingBilansLoaded] = useState(false);
+  const [existingBilansCount, setExistingBilansCount] = useState(0);
   const [weightDaysCount, setWeightDaysCount] = useState(0);
   const [currentWeekKey, setCurrentWeekKey] = useState('');
   const [currentWeekEnd, setCurrentWeekEnd] = useState('');
   const [photoURLs, setPhotoURLs] = useState({ face: null, profile: null, back: null });
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
-  // Pour la semaine en cours : aujourd'hui - 7j → aujourd'hui
+  // Seven completed days; the day of submission is not included.
   // Pour les semaines passées : naviguer dans les bilans existants
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const isCurrentWeek = weekOffset === 0;
@@ -57,10 +57,11 @@ export default function WeeklyCheckIn({ coachMode }) {
   const pastBilan = weekOffset > 0 ? existingBilansRef.current[weekOffset - 1] : null;
   // weekKey = date de saisie (aujourd'hui pour le nouveau, date du bilan existant pour les anciens)
   const weekKey = isCurrentWeek ? todayStr : (pastBilan?.id || pastBilan?.weekKey || pastBilan?.weekStart || todayStr);
-  const weekStart = isCurrentWeek ? format(subDays(new Date(), 6), 'yyyy-MM-dd') : (pastBilan?.weekStart || weekKey);
-  const weekEnd = isCurrentWeek ? todayStr : (pastBilan?.weekEnd || format(new Date(new Date(weekKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
-  const prevWeekKey = '';
-  const weekLabel = format(new Date(weekStart), "d MMM", { locale: fr }) + ' → ' + format(new Date(weekEnd), "d MMM yyyy", { locale: fr });
+  const weekStart = isCurrentWeek ? format(subDays(new Date(), 7), 'yyyy-MM-dd') : pastBilan?.weekStart;
+  const weekEnd = isCurrentWeek ? format(subDays(new Date(), 1), 'yyyy-MM-dd') : pastBilan?.weekEnd;
+  const weekLabel = weekStart && weekEnd
+    ? format(new Date(weekStart), "d MMM", { locale: fr }) + ' → ' + format(new Date(weekEnd), "d MMM yyyy", { locale: fr })
+    : 'Période non renseignée';
   const [prevMeasurements, setPrevMeasurements] = useState(null);
 
   const [form, setForm] = useState({
@@ -73,36 +74,41 @@ export default function WeeklyCheckIn({ coachMode }) {
   function set(key, val) { setForm(p => ({ ...p, [key]: val })); }
 
   useEffect(() => {
+    let active = true;
     async function load() {
       setLoading(true);
       setLoadError('');
       try {
-        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-
         // Profil
         const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
-        if (!profileDoc.exists()) { setLoading(false); return; }
+        if (!active) return;
+        if (!profileDoc.exists()) { setLoadError('Profil introuvable.'); return; }
         const p = profileDoc.data();
         setProfile(p);
 
         // Charger tous les bilans existants
-        const bilanSnap = await getDocs(collection(db, 'clients', currentUser.uid, 'weeklyEntries'));
-        const allBilans = readWeeklyEntries(bilanSnap, 20).reverse();
+        const bilanSnap = await getDocsFromServer(collection(db, 'clients', currentUser.uid, 'weeklyEntries'));
+        if (!active) return;
+        const allBilans = readWeeklyEntries(bilanSnap).reverse();
         existingBilansRef.current = allBilans;
-        setExistingBilansLoaded(true); // trigger une seule fois
+        setExistingBilansCount(allBilans.length);
 
         // Déterminer weekKey selon offset
         const isNow = weekOffset === 0;
         const past = weekOffset > 0 ? allBilans[weekOffset - 1] : null;
+        if (!isNow && !past) { setLoadError('Ce bilan n’existe plus. Reviens au bilan actuel.'); return; }
         const wKey = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.id || past?.weekKey || past?.weekStart || format(new Date(), 'yyyy-MM-dd'));
-        const wEnd = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekEnd || format(new Date(new Date(wKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
+        const wEnd = isNow ? format(subDays(new Date(), 1), 'yyyy-MM-dd') : past.weekEnd;
+        const wStart = isNow ? format(subDays(new Date(), 7), 'yyyy-MM-dd') : past.weekStart;
         setCurrentWeekKey(wKey);
         setCurrentWeekEnd(wEnd);
 
         // Bilan de la semaine affichée
-        const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', wKey));
-        if (weekDoc.exists()) {
-          const d = weekDoc.data();
+        const savedBilan = allBilans.find(bilan => bilan.id === wKey);
+        const previous = isNow ? allBilans.find(bilan => bilan.bilanDate < todayStr) : allBilans[weekOffset];
+        setPrevMeasurements(previous?.measurements || null);
+        if (savedBilan) {
+          const d = savedBilan;
           setForm({
             waist: d.measurements?.waist || '', hips: d.measurements?.hips || '',
             glutes: d.measurements?.glutes || '', thighs: d.measurements?.thighs || '',
@@ -112,43 +118,45 @@ export default function WeeklyCheckIn({ coachMode }) {
             weekNotes: d.weekNotes || '', weekHighlight: d.weekHighlight || '',
             weekDifficulty: d.weekDifficulty || '', avgWeight: d.avgWeight || '',
           });
-          if (d.photoURLs) setPhotoURLs(d.photoURLs);
+          setPhotoURLs(d.photoURLs || { face: null, profile: null, back: null });
         } else {
           setForm({ waist:'', hips:'', glutes:'', thighs:'', arms:'', energy:'', hunger:'', motivation:'', stress:'', adherence:'', weekNotes:'', weekHighlight:'', weekDifficulty:'', avgWeight:'' });
           setPhotoURLs({ face: null, profile: null, back: null });
         }
 
         // Stats nutritionnelles
-        const snap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(10)));
-        // Exclure le jour J (bilan fait le matin, journée pas terminée)
-        const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-        const wStart7 = format(subDays(new Date(wEnd), 6), 'yyyy-MM-dd');
-        const entries = snap.docs.map(d => d.data()).filter(e => e.date >= wStart7 && e.date <= (isNow ? yesterday : wEnd));
+        const snap = wStart && wEnd ? await getDocsFromServer(query(
+          collection(db, 'clients', currentUser.uid, 'dailyEntries'),
+          where('date', '>=', wStart), where('date', '<=', wEnd),
+        )) : null;
+        if (!active) return;
+        const entries = (snap?.docs || []).map(d => d.data()).sort((a, b) => a.date.localeCompare(b.date));
         if (entries.length > 0) {
-          const days = entries.map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 })).reverse();
-          const avg = key => Math.round(days.reduce((s,d) => s + d[key], 0) / days.length);
-          setWeekStats({ days, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat'), count: days.length });
+          const days = entries.map(e => ({ date: e.date, label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 }));
+          setWeekStats(summarizeWeeklyDays(days));
         } else {
-          setWeekStats(null);
+          setWeekStats(summarizeWeeklyDays(savedBilan?.weekStats?.days));
         }
 
         // Poids moyen
         const weightEntries = entries.filter(e => e.weight);
         setWeightDaysCount(weightEntries.length);
-        if (weightEntries.length > 0 && !weekDoc.exists()) {
+        if (weightEntries.length > 0 && !savedBilan) {
           const avgW = weightEntries.reduce((s,e) => s + e.weight, 0) / weightEntries.length;
           setForm(prev => ({ ...prev, avgWeight: +avgW.toFixed(1) }));
         }
 
       } catch (error) {
+        if (!active) return;
         console.error('Impossible de charger le bilan', error);
         setLoadError('Impossible de charger le bilan. Vérifie ta connexion et tes droits d’accès, puis recharge la page.');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
     load();
-  }, [currentUser.uid, weekOffset, existingBilansLoaded]);
+    return () => { active = false; };
+  }, [currentUser.uid, weekOffset, todayStr]);
   async function uploadToCloudinary(file, slot, clientProfile) {
     const lastName = (clientProfile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const firstName = (clientProfile?.firstName || '').toLowerCase().replace(/\s/g, '_');
@@ -227,8 +235,8 @@ export default function WeeklyCheckIn({ coachMode }) {
       });
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', saveKey), {
         weekKey: saveKey,
-        weekStart: weekStart,
-        weekEnd: saveEnd,
+        ...(weekStart ? { weekStart } : {}),
+        ...(saveEnd ? { weekEnd: saveEnd } : {}),
         bilanDate: isCurrentWeek ? todayStr : (pastBilan?.bilanDate || saveKey),
         avgWeight: form.avgWeight ? +form.avgWeight : null,
         measurements: {
@@ -250,6 +258,7 @@ export default function WeeklyCheckIn({ coachMode }) {
         weekHighlight: form.weekHighlight,
         weekDifficulty: form.weekDifficulty,
         weekStats: weekStats || null,
+        coachStatus: 'pending',
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setSaved(true);
@@ -275,7 +284,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       <div className="top-nav">
         <Link to={backUrl} style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => setWeekOffset(w => Math.min(w + 1, existingBilansRef.current.length))} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
+          <button onClick={() => setWeekOffset(w => Math.min(w + 1, existingBilansCount))} disabled={weekOffset >= existingBilansCount} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
           <div style={{ textAlign: 'center' }}>
             <div className="top-nav-title" style={{ fontSize: 13 }}>{isCurrentWeek ? 'Cette semaine' : weekLabel}</div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{weekLabel}</div>
@@ -286,7 +295,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       </div>
 
       <div className="page">
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>📅 {weekLabel} · Saisi le {format(new Date(), 'd MMM yyyy', { locale: fr })}</p>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>📅 {weekLabel} · Bilan du {format(new Date(isCurrentWeek ? todayStr : pastBilan?.bilanDate || todayStr), 'd MMM yyyy', { locale: fr })}</p>
         {saved && <div className="alert alert-success">✅ Bilan enregistré !</div>}
 
         {/* Weight */}
@@ -385,7 +394,10 @@ export default function WeeklyCheckIn({ coachMode }) {
         {weekStats && weekStats.count > 0 && (
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📊 Résumé nutritionnel de la semaine</div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Basé sur {weekStats.count} jour{weekStats.count > 1 ? 's' : ''} de suivi.</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Basé sur {weekStats.count} jour{weekStats.count > 1 ? 's' : ''} avec calories renseignées.</p>
+            {weekStats.incompleteCount > 0 && <p style={{ fontSize: 12, color: 'var(--warning)' }}>
+              {weekStats.incompleteCount} journée(s) incomplète(s), exclue(s) des moyennes.
+            </p>}
 
             {/* Bar chart */}
             <ResponsiveContainer width="100%" height={140}>

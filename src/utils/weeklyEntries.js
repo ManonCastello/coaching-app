@@ -17,7 +17,26 @@ export function normalizeWeeklyEntry(document) {
 }
 
 export function readWeeklyEntries(snapshot, count) {
-  return snapshot.docs.map(normalizeWeeklyEntry)
-    .sort((a, b) => (a.bilanDate || '').localeCompare(b.bilanDate || '') || a.id.localeCompare(b.id))
-    .slice(-count);
+  const entries = snapshot.docs.map(normalizeWeeklyEntry)
+    .sort((a, b) => (a.bilanDate || '').localeCompare(b.bilanDate || '') || a.id.localeCompare(b.id));
+  return Number.isInteger(count) && count > 0 ? entries.slice(-count) : entries;
+}
+
+// Zero calories mean an incomplete food log, not a day without food.
+export function summarizeWeeklyDays(days) {
+  if (!Array.isArray(days) || !days.length) return null;
+  const completeDays = days.filter(day => Number(day.calories) > 0);
+  const avg = key => completeDays.length
+    ? Math.round(completeDays.reduce((sum, day) => sum + (Number(day[key]) || 0), 0) / completeDays.length)
+    : null;
+  return {
+    days: days.map(day => ({ ...day, calories: Number(day.calories) > 0 ? Number(day.calories) : null })),
+    count: completeDays.length,
+    incompleteCount: days.length - completeDays.length,
+    avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat'),
+  };
+}
+
+export function wasSubmittedToday(entries, today) {
+  return entries.some(entry => entry.bilanDate === today);
 }

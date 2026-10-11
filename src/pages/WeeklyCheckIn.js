@@ -9,6 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLin
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import PhotoViewer from '../components/PhotoViewer';
+import { readWeeklyEntries } from '../utils/weeklyEntries';
 
 const CLOUDINARY_CLOUD = 'dduaqnygn';
 const CLOUDINARY_PRESET = 'fitlog_photos';
@@ -31,6 +32,7 @@ export default function WeeklyCheckIn({ coachMode }) {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [weekStats, setWeekStats] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -54,7 +56,7 @@ export default function WeeklyCheckIn({ coachMode }) {
   // Navigation : semaine en cours = aujourd'hui, passées = bilans existants
   const pastBilan = weekOffset > 0 ? existingBilansRef.current[weekOffset - 1] : null;
   // weekKey = date de saisie (aujourd'hui pour le nouveau, date du bilan existant pour les anciens)
-  const weekKey = isCurrentWeek ? todayStr : (pastBilan?.weekKey || pastBilan?.weekStart || todayStr);
+  const weekKey = isCurrentWeek ? todayStr : (pastBilan?.id || pastBilan?.weekKey || pastBilan?.weekStart || todayStr);
   const weekStart = isCurrentWeek ? format(subDays(new Date(), 6), 'yyyy-MM-dd') : (pastBilan?.weekStart || weekKey);
   const weekEnd = isCurrentWeek ? todayStr : (pastBilan?.weekEnd || format(new Date(new Date(weekKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
   const prevWeekKey = '';
@@ -72,70 +74,78 @@ export default function WeeklyCheckIn({ coachMode }) {
 
   useEffect(() => {
     async function load() {
-      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+      setLoading(true);
+      setLoadError('');
+      try {
+        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
 
-      // Profil
-      const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
-      if (!profileDoc.exists()) { setLoading(false); return; }
-      const p = profileDoc.data();
-      setProfile(p);
+        // Profil
+        const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+        if (!profileDoc.exists()) { setLoading(false); return; }
+        const p = profileDoc.data();
+        setProfile(p);
 
-      // Charger tous les bilans existants
-      const bilanSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(20)));
-      const allBilans = bilanSnap.docs.map(d => d.data());
-      existingBilansRef.current = allBilans;
-      setExistingBilansLoaded(true); // trigger une seule fois
+        // Charger tous les bilans existants
+        const bilanSnap = await getDocs(collection(db, 'clients', currentUser.uid, 'weeklyEntries'));
+        const allBilans = readWeeklyEntries(bilanSnap, 20).reverse();
+        existingBilansRef.current = allBilans;
+        setExistingBilansLoaded(true); // trigger une seule fois
 
-      // Déterminer weekKey selon offset
-      const isNow = weekOffset === 0;
-      const past = weekOffset > 0 ? allBilans[weekOffset - 1] : null;
-      const wKey = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekKey || past?.weekStart || format(new Date(), 'yyyy-MM-dd'));
-      const wEnd = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekEnd || format(new Date(new Date(wKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
-      setCurrentWeekKey(wKey);
-      setCurrentWeekEnd(wEnd);
+        // Déterminer weekKey selon offset
+        const isNow = weekOffset === 0;
+        const past = weekOffset > 0 ? allBilans[weekOffset - 1] : null;
+        const wKey = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.id || past?.weekKey || past?.weekStart || format(new Date(), 'yyyy-MM-dd'));
+        const wEnd = isNow ? format(new Date(), 'yyyy-MM-dd') : (past?.weekEnd || format(new Date(new Date(wKey).getTime() + 6*86400000), 'yyyy-MM-dd'));
+        setCurrentWeekKey(wKey);
+        setCurrentWeekEnd(wEnd);
 
-      // Bilan de la semaine affichée
-      const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', wKey));
-      if (weekDoc.exists()) {
-        const d = weekDoc.data();
-        setForm({
-          waist: d.measurements?.waist || '', hips: d.measurements?.hips || '',
-          glutes: d.measurements?.glutes || '', thighs: d.measurements?.thighs || '',
-          arms: d.measurements?.arms || '', energy: d.questionnaire?.energy || '',
-          hunger: d.questionnaire?.hunger || '', motivation: d.questionnaire?.motivation || '',
-          stress: d.questionnaire?.stress || '', adherence: d.questionnaire?.adherence || '',
-          weekNotes: d.weekNotes || '', weekHighlight: d.weekHighlight || '',
-          weekDifficulty: d.weekDifficulty || '', avgWeight: d.avgWeight || '',
-        });
-        if (d.photoURLs) setPhotoURLs(d.photoURLs);
-      } else {
-        setForm({ waist:'', hips:'', glutes:'', thighs:'', arms:'', energy:'', hunger:'', motivation:'', stress:'', adherence:'', weekNotes:'', weekHighlight:'', weekDifficulty:'', avgWeight:'' });
-        setPhotoURLs({ face: null, profile: null, back: null });
+        // Bilan de la semaine affichée
+        const weekDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', wKey));
+        if (weekDoc.exists()) {
+          const d = weekDoc.data();
+          setForm({
+            waist: d.measurements?.waist || '', hips: d.measurements?.hips || '',
+            glutes: d.measurements?.glutes || '', thighs: d.measurements?.thighs || '',
+            arms: d.measurements?.arms || '', energy: d.questionnaire?.energy || '',
+            hunger: d.questionnaire?.hunger || '', motivation: d.questionnaire?.motivation || '',
+            stress: d.questionnaire?.stress || '', adherence: d.questionnaire?.adherence || '',
+            weekNotes: d.weekNotes || '', weekHighlight: d.weekHighlight || '',
+            weekDifficulty: d.weekDifficulty || '', avgWeight: d.avgWeight || '',
+          });
+          if (d.photoURLs) setPhotoURLs(d.photoURLs);
+        } else {
+          setForm({ waist:'', hips:'', glutes:'', thighs:'', arms:'', energy:'', hunger:'', motivation:'', stress:'', adherence:'', weekNotes:'', weekHighlight:'', weekDifficulty:'', avgWeight:'' });
+          setPhotoURLs({ face: null, profile: null, back: null });
+        }
+
+        // Stats nutritionnelles
+        const snap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(10)));
+        // Exclure le jour J (bilan fait le matin, journée pas terminée)
+        const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+        const wStart7 = format(subDays(new Date(wEnd), 6), 'yyyy-MM-dd');
+        const entries = snap.docs.map(d => d.data()).filter(e => e.date >= wStart7 && e.date <= (isNow ? yesterday : wEnd));
+        if (entries.length > 0) {
+          const days = entries.map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 })).reverse();
+          const avg = key => Math.round(days.reduce((s,d) => s + d[key], 0) / days.length);
+          setWeekStats({ days, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat'), count: days.length });
+        } else {
+          setWeekStats(null);
+        }
+
+        // Poids moyen
+        const weightEntries = entries.filter(e => e.weight);
+        setWeightDaysCount(weightEntries.length);
+        if (weightEntries.length > 0 && !weekDoc.exists()) {
+          const avgW = weightEntries.reduce((s,e) => s + e.weight, 0) / weightEntries.length;
+          setForm(prev => ({ ...prev, avgWeight: +avgW.toFixed(1) }));
+        }
+
+      } catch (error) {
+        console.error('Impossible de charger le bilan', error);
+        setLoadError('Impossible de charger le bilan. Vérifie ta connexion et tes droits d’accès, puis recharge la page.');
+      } finally {
+        setLoading(false);
       }
-
-      // Stats nutritionnelles
-      const snap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(10)));
-      // Exclure le jour J (bilan fait le matin, journée pas terminée)
-      const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-      const wStart7 = format(subDays(new Date(wEnd), 6), 'yyyy-MM-dd');
-      const entries = snap.docs.map(d => d.data()).filter(e => e.date >= wStart7 && e.date <= (isNow ? yesterday : wEnd));
-      if (entries.length > 0) {
-        const days = entries.map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 })).reverse();
-        const avg = key => Math.round(days.reduce((s,d) => s + d[key], 0) / days.length);
-        setWeekStats({ days, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat'), count: days.length });
-      } else {
-        setWeekStats(null);
-      }
-
-      // Poids moyen
-      const weightEntries = entries.filter(e => e.weight);
-      setWeightDaysCount(weightEntries.length);
-      if (weightEntries.length > 0 && !weekDoc.exists()) {
-        const avgW = weightEntries.reduce((s,e) => s + e.weight, 0) / weightEntries.length;
-        setForm(prev => ({ ...prev, avgWeight: +avgW.toFixed(1) }));
-      }
-
-      setLoading(false);
     }
     load();
   }, [currentUser.uid, weekOffset, existingBilansLoaded]);
@@ -219,7 +229,7 @@ export default function WeeklyCheckIn({ coachMode }) {
         weekKey: saveKey,
         weekStart: weekStart,
         weekEnd: saveEnd,
-        bilanDate: format(new Date(), 'yyyy-MM-dd'),
+        bilanDate: isCurrentWeek ? todayStr : (pastBilan?.bilanDate || saveKey),
         avgWeight: form.avgWeight ? +form.avgWeight : null,
         measurements: {
           waist: form.waist ? +form.waist : null,
@@ -247,13 +257,18 @@ export default function WeeklyCheckIn({ coachMode }) {
         if (coachMode) navigate('/coach');
         else navigate('/dashboard');
       }, 1400);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert('Le bilan n’a pas été enregistré. Vérifie ta connexion puis réessaie.');
+    }
     setSaving(false);
   }
 
   const backUrl = coachMode ? '/coach' : '/dashboard';
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
+
+  if (loadError) return <div className="app-shell"><div className="card" role="alert">{loadError}<Link to={backUrl}>Retour</Link></div></div>;
 
   return (
     <div className="app-shell">

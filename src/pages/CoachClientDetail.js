@@ -2,12 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { format, startOfWeek, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS } from '../utils/calculations';
 import PhotoViewer from '../components/PhotoViewer';
+import { readWeeklyEntries } from '../utils/weeklyEntries';
 
 export default function CoachClientDetail() {
   const { clientId } = useParams();
@@ -15,6 +16,8 @@ export default function CoachClientDetail() {
   const [client, setClient] = useState(null);
   const [entries, setEntries] = useState([]);
   const [weeklyEntries, setWeeklyEntries] = useState([]);
+  const [weeklyError, setWeeklyError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [editTargets, setEditTargets] = useState(false);
   const [targetsValidFrom, setTargetsValidFrom] = useState('');
@@ -70,55 +73,73 @@ export default function CoachClientDetail() {
 
   useEffect(() => {
     async function load() {
-      const clientDoc = await getDoc(doc(db, 'clients', clientId));
-      if (clientDoc.exists()) {
-        const data = clientDoc.data();
-        setClient(data);
-        setTargets(data.targets || {});
-        setInfoForm({ firstName: data.firstName, lastName: data.lastName, dob: data.dob || '', profession: data.profession || '', weight: data.weight, height: data.height, sex: data.sex, activityLevel: data.activityLevel, goal: data.goal });
-        setMealSplit(data.mealSplit || { morning: 25, lunch: 35, dinner: 30, snack: 0 });
-        setHasSnack(!!(data.mealSplit?.snack > 0));
-        setCustomFoods(data.customFoods || { protein: [], carbs: [], fat: [] });
-        setStartForm({ weight: data.startWeight || data.weight || '', waist: data.startMeasurements?.waist || '', hips: data.startMeasurements?.hips || '', glutes: data.startMeasurements?.glutes || '', thighs: data.startMeasurements?.thighs || '', arms: data.startMeasurements?.arms || '' });
-        setStartPhotos(data.startPhotos || { face: null, profile: null, back: null });
-        const [h, m] = (data.reminderTime || '20:00').split(':');
-        setReminderHour(h); setReminderMin(m);
-        setBilanDay(data.weeklyBilanDay ?? 1);
-        setNotesForm(data.coachNotes || '');
-        setCoachingForm({
-          coachingStartDate: data.coachingStartDate || '',
-          coachingEndDate: data.coachingEndDate || '',
-          firstPaymentDate: data.firstPaymentDate || '',
-          lastPaymentDate: data.lastPaymentDate || '',
-          coachingDuration: data.coachingDuration || '3m',
-        });
-      }
-      const dailyQ = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(30));
-      const dailySnap = await getDocs(dailyQ);
-      setEntries(dailySnap.docs.map(d => d.data()).reverse());
-      const weeklyQ = query(collection(db, 'clients', clientId, 'weeklyEntries'), orderBy('weekStart', 'desc'), limit(12));
-      const weeklySnap = await getDocs(weeklyQ);
-      setWeeklyEntries(weeklySnap.docs.map(d => d.data()).reverse());
-      // Charger objectifs hebdo
-      const wgQ = query(collection(db, 'clients', clientId, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
-      const wgSnap = await getDocs(wgQ);
-      if (!wgSnap.empty) {
-        const wgData = wgSnap.docs[0].data();
-        setWeekGoals(wgData);
-        // Pré-remplir le formulaire avec les derniers objectifs
-        const gf = {};
-        (wgData.goals || []).forEach(g => { gf[g.key] = { ...g }; });
-        if (Object.keys(gf).length) setGoalsForm(prev => ({ ...prev, ...gf }));
-      }
-      // Charger la consultation attachée à ce client
-      const { collection: colC, query: qC, where: whereC, getDocs: gdC, limit: limC } = await import('firebase/firestore');
-      const consultQ = qC(colC(db, 'consultations'), whereC('attachedClientId', '==', clientId), limC(1));
-      const consultSnap = await gdC(consultQ);
-      if (!consultSnap.empty) setClientConsultation(consultSnap.docs[0].data());
+      setLoading(true);
+      setClient(null);
+      setLoadError('');
+      try {
+        const clientDoc = await getDoc(doc(db, 'clients', clientId));
+        if (clientDoc.exists()) {
+          const data = clientDoc.data();
+          setClient(data);
+          setTargets(data.targets || {});
+          setInfoForm({ firstName: data.firstName, lastName: data.lastName, dob: data.dob || '', profession: data.profession || '', weight: data.weight, height: data.height, sex: data.sex, activityLevel: data.activityLevel, goal: data.goal });
+          setMealSplit(data.mealSplit || { morning: 25, lunch: 35, dinner: 30, snack: 0 });
+          setHasSnack(!!(data.mealSplit?.snack > 0));
+          setCustomFoods(data.customFoods || { protein: [], carbs: [], fat: [] });
+          setStartForm({ weight: data.startWeight || data.weight || '', waist: data.startMeasurements?.waist || '', hips: data.startMeasurements?.hips || '', glutes: data.startMeasurements?.glutes || '', thighs: data.startMeasurements?.thighs || '', arms: data.startMeasurements?.arms || '' });
+          setStartPhotos(data.startPhotos || { face: null, profile: null, back: null });
+          const [h, m] = (data.reminderTime || '20:00').split(':');
+          setReminderHour(h); setReminderMin(m);
+          setBilanDay(data.weeklyBilanDay ?? 1);
+          setNotesForm(data.coachNotes || '');
+          setCoachingForm({
+            coachingStartDate: data.coachingStartDate || '',
+            coachingEndDate: data.coachingEndDate || '',
+            firstPaymentDate: data.firstPaymentDate || '',
+            lastPaymentDate: data.lastPaymentDate || '',
+            coachingDuration: data.coachingDuration || '3m',
+          });
+        }
+        const dailyQ = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(30));
+        const dailySnap = await getDocs(dailyQ);
+        setEntries(dailySnap.docs.map(d => d.data()).reverse());
+        // Charger objectifs hebdo
+        const wgQ = query(collection(db, 'clients', clientId, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
+        const wgSnap = await getDocs(wgQ);
+        if (!wgSnap.empty) {
+          const wgData = wgSnap.docs[0].data();
+          setWeekGoals(wgData);
+          // Pré-remplir le formulaire avec les derniers objectifs
+          const gf = {};
+          (wgData.goals || []).forEach(g => { gf[g.key] = { ...g }; });
+          if (Object.keys(gf).length) setGoalsForm(prev => ({ ...prev, ...gf }));
+        }
+        // Charger la consultation attachée à ce client
+        const { collection: colC, query: qC, where: whereC, getDocs: gdC, limit: limC } = await import('firebase/firestore');
+        const consultQ = qC(colC(db, 'consultations'), whereC('attachedClientId', '==', clientId), limC(1));
+        const consultSnap = await gdC(consultQ);
+        if (!consultSnap.empty) setClientConsultation(consultSnap.docs[0].data());
 
-      setLoading(false);
+      } catch (error) {
+        console.error('Impossible de charger la fiche', error);
+        setLoadError('La fiche n’a pas pu être chargée complètement. Vérifie ta connexion et tes droits d’accès.');
+      } finally {
+        setLoading(false);
+      }
     }
     load();
+  }, [clientId]);
+
+  useEffect(() => {
+    setWeeklyEntries([]);
+    setWeeklyError('');
+    return onSnapshot(collection(db, 'clients', clientId, 'weeklyEntries'), snapshot => {
+      setWeeklyEntries(readWeeklyEntries(snapshot, 12));
+      setWeeklyError('');
+    }, error => {
+      console.error('Impossible de charger les bilans', error);
+      setWeeklyError('Impossible de charger les bilans. Vérifie ta connexion et tes droits d’accès, puis recharge la fiche.');
+    });
   }, [clientId]);
 
   async function saveTargets() {
@@ -357,7 +378,7 @@ export default function CoachClientDetail() {
   }
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
-  if (!client) return null;
+  if (!client) return <div className="app-shell"><div className="card" role="alert">{loadError || 'Client introuvable.'}<Link to="/coach">Retour aux clients</Link></div></div>;
 
   const age = calculateAgeFromDOB(client.dob);
   const bmr = calculateBMR({ weight: client.weight, height: client.height, age, sex: client.sex });
@@ -525,6 +546,7 @@ export default function CoachClientDetail() {
                   📈 Entre les bilans
                   <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
                     {prevWeekly
+                      && prevWeekly.weekStart && latestWeekly.weekStart
                       ? format(new Date(prevWeekly.weekStart), "d MMM", { locale: fr }) + ' → ' + format(new Date(latestWeekly.weekStart), "d MMM", { locale: fr })
                       : 'depuis le début'}
                   </span>
@@ -1061,6 +1083,8 @@ export default function CoachClientDetail() {
         {/* BILANS */}
         {activeTab === 'bilans' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {loadError && <div className="card" role="alert">{loadError}</div>}
+            {weeklyError && <div className="card" role="alert">{weeklyError}</div>}
             {/* Mensurations de départ pour référence */}
             {client.startMeasurements && (
               <div className="card" style={{ background: 'var(--primary-bg)', border: '1.5px solid var(--primary-light)' }}>
@@ -1093,27 +1117,28 @@ export default function CoachClientDetail() {
             {[...weeklyEntries].reverse().map(w => {
               // Calculer stats depuis entries chargées si weekStats absent
               const wStart = w.weekStart;
-              const wEnd = w.weekEnd || format(new Date(new Date(w.weekStart).getTime() + 6 * 86400000), 'yyyy-MM-dd');
+              const wEnd = w.weekEnd;
               const wDays = entries.filter(e => e.date >= wStart && e.date <= wEnd && e.calories > 0)
                 .map(e => ({ label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0 }));
               const avg = key => wDays.length ? Math.round(entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).reduce((s,e) => s + (e[key]||0), 0) / (entries.filter(e => e.date >= wStart && e.date <= wEnd && e[key]).length || 1)) : 0;
               const computedStats = wDays.length > 0 ? { days: wDays, count: wDays.length, avgCalories: avg('calories'), avgProtein: avg('protein'), avgCarbs: avg('carbs'), avgFat: avg('fat') } : null;
               const statsToShow = w.weekStats?.days ? w.weekStats : computedStats;
               return (
-              <div key={w.weekStart} className="card">
+              <div key={w.id} className="card">
                 {/* Header avec statut */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>
-                    Semaine du {format(new Date(w.weekStart), 'd MMM', { locale: fr })}
+                    Bilan {w.bilanDate ? `du ${format(new Date(w.bilanDate), 'd MMM yyyy', { locale: fr })}` : '(date indisponible)'}
+                    {w.weekStart && w.weekEnd && <div style={{ fontSize: 12, fontWeight: 400 }}>Période du {format(new Date(w.weekStart), 'd MMM', { locale: fr })} au {format(new Date(w.weekEnd), 'd MMM', { locale: fr })}</div>}
                     {w.avgWeight && <span className="badge badge-primary" style={{ marginLeft: 8 }}>{w.avgWeight} kg</span>}
                   </div>
                   <button
                     onClick={async () => {
                       const { doc: d, setDoc: sd } = await import('firebase/firestore');
                       const newStatus = w.coachStatus === 'done' ? 'pending' : 'done';
-                      const docKey = w.weekKey || w.weekStart;
+                      const docKey = w.id;
                       await sd(d(db, 'clients', clientId, 'weeklyEntries', docKey), { coachStatus: newStatus }, { merge: true });
-                      setWeeklyEntries(prev => prev.map(e => (e.weekKey || e.weekStart) === docKey ? { ...e, coachStatus: newStatus } : e));
+                      setWeeklyEntries(prev => prev.map(e => e.id === docKey ? { ...e, coachStatus: newStatus } : e));
                     }}
                     style={{
                       padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12,
@@ -1202,7 +1227,7 @@ export default function CoachClientDetail() {
                 {/* Commentaire coach */}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>💬 Commentaire coach</div>
-                  {editingCoachComment === w.weekStart ? (
+                  {editingCoachComment === w.id ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <textarea
                         className="input"
@@ -1216,9 +1241,9 @@ export default function CoachClientDetail() {
                         <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setEditingCoachComment(null)}>Annuler</button>
                         <button className="btn btn-primary" style={{ flex: 1 }} onClick={async () => {
                           const { doc: d, setDoc: sd } = await import('firebase/firestore');
-                          const docKey2 = w.weekKey || w.weekStart;
+                          const docKey2 = w.id;
                           await sd(d(db, 'clients', clientId, 'weeklyEntries', docKey2), { coachComment: coachCommentForm }, { merge: true });
-                          setWeeklyEntries(prev => prev.map(e => (e.weekKey || e.weekStart) === docKey2 ? { ...e, coachComment: coachCommentForm } : e));
+                          setWeeklyEntries(prev => prev.map(e => e.id === docKey2 ? { ...e, coachComment: coachCommentForm } : e));
                           setEditingCoachComment(null);
                         }}>✅ Enregistrer</button>
                       </div>
@@ -1228,7 +1253,7 @@ export default function CoachClientDetail() {
                       <div style={{ fontSize: 13, lineHeight: 1.6, flex: 1, fontStyle: w.coachComment ? 'normal' : 'italic', color: w.coachComment ? 'var(--text)' : 'var(--text-muted)' }}>
                         {w.coachComment || 'Aucun commentaire — clique pour ajouter'}
                       </div>
-                      <button className="btn btn-secondary btn-sm" style={{ width: 'auto', flexShrink: 0 }} onClick={() => { setEditingCoachComment(w.weekStart); setCoachCommentForm(w.coachComment || ''); }}>
+                      <button className="btn btn-secondary btn-sm" style={{ width: 'auto', flexShrink: 0 }} onClick={() => { setEditingCoachComment(w.id); setCoachCommentForm(w.coachComment || ''); }}>
                         ✏️
                       </button>
                     </div>

@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {collection, getDocsFromServer, query, orderBy, limit} from 'firebase/firestore';
 import {db} from '../firebase';
-const actions = {setTargets:'Objectifs modifiés', resetBalance:'Solde remis à zéro', unlockDaily:'Journée rouverte', correctDaily:'Journée corrigée'};
+const actions = {setTargets:'Objectifs modifiés', resetBalance:'Solde remis à zéro', setBalance:'Solde corrigé', unlockDaily:'Journée rouverte', correctDaily:'Journée corrigée'};
 const fields = {targets:'Objectifs', calories:'Calories', protein:'Protéines', carbs:'Glucides', fat:'Lipides', steps:'Pas', sleep:'Sommeil', weight:'Poids', dailyBalance:'Solde', dailyTarget:'Objectif du jour', locked:'Journée validée', sessionsPerWeek:'Séances par semaine', kcalPer1000Steps:'Ajustement pour 1 000 pas', sessionCalorieDeficit:'Ajustement par séance', extraActivityCal:'Activité supplémentaire'};
 function values(value) {
   return <dl>{Object.entries(value || {}).filter(([key]) => key !== 'targetPeriod').map(([key, item]) => <div key={key}>

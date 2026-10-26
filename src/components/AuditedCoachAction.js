@@ -26,7 +26,7 @@ export default function AuditedCoachAction({command, onClose, onSaved}) {
   }
   return <div style={{position: 'fixed', inset: 0, background: '#0007', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20}}>
     <form onSubmit={save} className="card" role="dialog" aria-modal="true" aria-labelledby="audit-title" style={{width: '100%', maxWidth: 480}}>
-      <h2 id="audit-title">{command.action === 'setTargets' ? 'Modifier les objectifs' : command.action === 'resetBalance' ? 'Remettre le solde à zéro' : 'Rouvrir cette journée'}</h2>
+      <h2 id="audit-title">{command.action === 'setTargets' ? 'Modifier les objectifs' : command.action === 'resetBalance' ? 'Remettre le solde à zéro' : command.action === 'setBalance' ? 'Corriger le solde' : 'Rouvrir cette journée'}</h2>
       <p>La modification et son motif seront conservés dans l’historique sécurisé.</p>
       {command.day && <p>Journée : {command.day}</p>}
       <label htmlFor="audit-reason">Motif de la modification</label>

@@ -234,7 +234,7 @@ export default function CoachClientDetail() {
   }
 
   async function resetWeekBalance() {
-    if (!window.confirm('Remettre la balance à zéro ?')) return;
+    if (!auditedMutationsEnabled && !window.confirm('Remettre la balance à zéro ?')) return;
     const { collection, query, orderBy, limit, getDocs, doc: d, setDoc: sd, serverTimestamp: st } = await import('firebase/firestore');
     const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(14));
     const snap = await getDocs(q);
@@ -535,6 +535,11 @@ export default function CoachClientDetail() {
                     <input className="input" type="number" value={balanceInput} onChange={e => setBalanceInput(e.target.value)} style={{ flex: 1 }} placeholder="ex: -200" />
                     <button className="btn btn-primary" style={{ width: 'auto' }} onClick={async () => {
                       if (!lastLocked) return;
+                      if (auditedMutationsEnabled) {
+                        if (!balanceInput.trim() || !Number.isFinite(Number(balanceInput))) return;
+                        setAuditRequest({action: 'setBalance', clientId, day: lastLocked.date, expectedRevision: lastLocked.auditRevision || 0, patch: {dailyBalance: Number(balanceInput)}});
+                        return;
+                      }
                       const { doc: d, setDoc: sd } = await import('firebase/firestore');
                       await sd(d(db, 'clients', clientId, 'dailyEntries', lastLocked.date), { dailyBalance: +balanceInput }, { merge: true });
                       setEntries(prev => prev.map(e => e.date === lastLocked.date ? { ...e, dailyBalance: +balanceInput } : e));

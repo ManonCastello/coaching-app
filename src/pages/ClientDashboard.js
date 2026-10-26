@@ -11,6 +11,8 @@ import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
 import useWeeklyEntries from '../hooks/useWeeklyEntries';
 import { wasSubmittedToday } from '../utils/weeklyEntries';
+import CoachAuditHistory from '../components/CoachAuditHistory';
+import { auditedMutationsEnabled } from '../components/AuditedCoachAction';
 
 export default function ClientDashboard() {
   const { currentUser, logout, userRole, coachMode, switchMode } = useAuth();
@@ -385,6 +387,12 @@ export default function ClientDashboard() {
         )}
 
       </div>
+      {auditedMutationsEnabled && <div className="page">
+        <details>
+          <summary style={{cursor:'pointer', fontWeight:700, padding:'12px 0'}}>📝 Les mises à jour de ma coach</summary>
+          <CoachAuditHistory clientId={currentUser.uid} audience="student" hideValues={profile.coachingMode === 'intuitif'} />
+        </details>
+      </div>}
       <TabBar />
     </div>
   );

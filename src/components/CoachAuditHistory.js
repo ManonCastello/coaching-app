@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {collection, getDocsFromServer, query, orderBy, limit} from 'firebase/firestore';
 import {db} from '../firebase';
-const actions = {validateDaily:'Journée validée',setTargets:'Objectifs modifiés', resetBalance:'Solde remis à zéro', setBalance:'Solde corrigé', unlockDaily:'Journée rouverte', correctDaily:'Journée corrigée'};
+const actions = {assignCoach:'Partage du suivi accepté',validateDaily:'Journée validée',setTargets:'Objectifs modifiés', resetBalance:'Solde remis à zéro', setBalance:'Solde corrigé', unlockDaily:'Journée rouverte', correctDaily:'Journée corrigée'};
 const fields = {targets:'Objectifs', calories:'Calories', protein:'Protéines', carbs:'Glucides', fat:'Lipides', steps:'Pas', sleep:'Sommeil', weight:'Poids', dailyBalance:'Solde', dailyTarget:'Objectif du jour', locked:'Journée validée', sessionsPerWeek:'Séances par semaine', kcalPer1000Steps:'Ajustement pour 1 000 pas', sessionCalorieDeficit:'Ajustement par séance', extraActivityCal:'Activité supplémentaire'};
 const calculationFields={balanceCalculation:'Détail du calcul',balanceOverride:'Solde fixé par la coach',amount:'Solde',base:'Objectif de base',stepsAdjustment:'Ajustement des pas',sessionAdjustment:'Ajustement de séance',extraActivity:'Activité supplémentaire',target:'Objectif du jour',intake:'Apports',delta:'Écart du jour',carry:'Report précédent',total:'Solde cumulé',targetsSnapshot:'Objectifs utilisés',state:'État du solde',override:'Solde fixé par la coach',tracking:'Comptage activé',excluded:'Journée exclue'};
 const states={validated:'Validé',pending:'En attente d’une journée précédente',reopened:'Journée rouverte'};
@@ -28,8 +28,8 @@ export default function CoachAuditHistory({clientId, audience = 'coach', hideVal
     {error && <button className="btn btn-secondary" onClick={() => setRefresh(value => value + 1)}>Réessayer</button>}
     {events.map(event => <details key={event.id} style={{padding:'12px 0', borderBottom:'1px solid var(--border-light)'}}>
       <summary>{actions[event.action] || 'Modification'} · {event.createdAt?.toDate?.().toLocaleString('fr-FR') || 'Date indisponible'}</summary>
-      <p>{hideValues ? event.actorRole==='student'?'Tu as validé ton journal.':'Ta coach a mis à jour ton suivi. Les détails chiffrés sont masqués dans ton mode sans comptage.' : event.reason}</p>
-      <p>{audience === 'student' ? event.actorRole==='student'?'Validation effectuée par le titulaire du journal.':'Modification effectuée par ta coach.' : `Auteur : ${event.actorRole==='student'?'élève':'coach'} · identifiant du compte ${event.actorId}`}</p>
+      <p>{hideValues ? event.actorRole==='student'?(event.action==='assignCoach'?'Tu as accepté le partage de ton suivi avec cette coach.':'Tu as validé ton journal.'):'Ta coach a mis à jour ton suivi. Les détails chiffrés sont masqués dans ton mode sans comptage.' : event.reason}</p>
+      <p>{audience === 'student' ? event.actorRole==='student'?'Action effectuée par le titulaire du journal.':'Modification effectuée par ta coach.' : `Auteur : ${event.actorRole==='student'?'élève':'coach'} · identifiant du compte ${event.actorId}`}</p>
       {!hideValues && <div style={{display:'flex', gap:24, flexWrap:'wrap'}}>
         <div><strong>Avant</strong>{values(event.before)}</div>
         <div><strong>Après</strong>{values(event.after)}</div>

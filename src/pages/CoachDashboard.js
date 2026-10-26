@@ -7,6 +7,8 @@ import { collection, getDocs, query, where, doc, getDoc, updateDoc } from 'fireb
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import CoachToggle from '../components/CoachToggle';
+import CoachInvitations from '../components/CoachInvitations';
+import {auditedMutationsEnabled} from '../components/AuditedCoachAction';
 
 export default function CoachDashboard() {
   const { currentUser, logout, coachMode, switchMode } = useAuth();
@@ -82,6 +84,7 @@ export default function CoachDashboard() {
       </div>
 
       <div className="page">
+        {auditedMutationsEnabled&&<CoachInvitations/>}
         <div className="hero-banner" style={{ marginBottom: 24 }}>
           <div style={{ position: 'relative', zIndex: 1 }}>
             <p style={{ fontSize: 13, opacity: 0.8, marginBottom: 8 }}>Tableau de bord coach</p>

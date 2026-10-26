@@ -13,6 +13,7 @@ import { summarizeWeeklyDays } from '../utils/weeklyEntries';
 import useWeeklyEntries from '../hooks/useWeeklyEntries';
 import CoachAuditHistory from '../components/CoachAuditHistory';
 import AuditedCoachAction, {auditedMutationsEnabled} from '../components/AuditedCoachAction';
+import {readValidatedEntry} from '../utils/validatedBalance';
 
 export default function CoachClientDetail() {
   const { currentUser } = useAuth();
@@ -40,6 +41,7 @@ export default function CoachClientDetail() {
   const [notesForm, setNotesForm] = useState('');
   const [editBalance, setEditBalance] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
+  const [validatedEntry,setValidatedEntry]=useState(null);
   const [editingCoachComment, setEditingCoachComment] = useState(null);
   const [coachCommentForm, setCoachCommentForm] = useState('');
   const [infoForm, setInfoForm] = useState({});
@@ -110,6 +112,7 @@ export default function CoachClientDetail() {
         const dailyQ = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(30));
         const dailySnap = await getDocs(dailyQ);
         setEntries(dailySnap.docs.map(d => d.data()).reverse());
+        if(auditedMutationsEnabled)setValidatedEntry(await readValidatedEntry(clientId,{throughDay:format(new Date(),'yyyy-MM-dd')}));
         // Charger objectifs hebdo
         const wgQ = query(collection(db, 'clients', clientId, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
         const wgSnap = await getDocs(wgQ);
@@ -234,6 +237,14 @@ export default function CoachClientDetail() {
   }
 
   async function resetWeekBalance() {
+    if(auditedMutationsEnabled){
+      try{
+        const last=await readValidatedEntry(clientId,{throughDay:format(new Date(),'yyyy-MM-dd')});
+        if(!last){alert('Aucune journée validée trouvée.');return;}
+        setAuditRequest({action:'resetBalance',clientId,day:last.date,expectedRevision:last.auditRevision??0});
+      }catch{alert('Le solde n’a pas pu être chargé. Vérifie ta connexion avant de réessayer.');}
+      return;
+    }
     if (!auditedMutationsEnabled && !window.confirm('Remettre la balance à zéro ?')) return;
     const { collection, query, orderBy, limit, getDocs, doc: d, setDoc: sd, serverTimestamp: st } = await import('firebase/firestore');
     const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(14));
@@ -243,10 +254,6 @@ export default function CoachClientDetail() {
     const lastLocked = entries.find(e => e.locked && e.date !== today);
     if (!lastLocked) {
       alert('Aucun jour verrouillé trouvé.');
-      return;
-    }
-    if (auditedMutationsEnabled) {
-      setAuditRequest({action: 'resetBalance', clientId, day: lastLocked.date, expectedRevision: lastLocked.auditRevision || 0});
       return;
     }
     await sd(lastLocked.ref, { dailyBalance: 0 }, { merge: true });
@@ -413,8 +420,8 @@ export default function CoachClientDetail() {
   // Balance semaine : dailyBalance du dernier jour verrouillé (hors aujourd'hui)
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const prevEntries = [...entries].sort((a,b) => b.date.localeCompare(a.date)).filter(e => e.date !== todayStr);
-  const lastLocked = prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
-  const coachWeekBalance = lastLocked ? Math.round(lastLocked.dailyBalance) : 0;
+  const lastLocked = auditedMutationsEnabled?validatedEntry:prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
+  const coachWeekBalance = lastLocked?.balanceCalculation?.state==='pending'?null:lastLocked ? Math.round(lastLocked.dailyBalance) : 0;
 
   const tabs = [
     { key: 'overview', label: '📊 Vue' },
@@ -512,15 +519,15 @@ export default function CoachClientDetail() {
               <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editBalance ? 12 : 0 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>⚖️ Balance calorique semaine</div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>⚖️ {auditedMutationsEnabled?'Solde validé':'Balance calorique semaine'}</div>
                     {!editBalance && (
                       <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: coachWeekBalance > 200 ? 'var(--warning)' : coachWeekBalance < -200 ? 'var(--danger)' : 'var(--success)' }}>
-                        {coachWeekBalance > 0 ? '+' : ''}{coachWeekBalance} kcal
+                        {coachWeekBalance===null?'En attente':`${coachWeekBalance > 0 ? '+' : ''}${coachWeekBalance} kcal`}
                       </div>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setEditBalance(!editBalance); setBalanceInput(String(coachWeekBalance)); }}>
+                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setEditBalance(!editBalance); setBalanceInput(coachWeekBalance===null?'':String(coachWeekBalance)); }}>
                       {editBalance ? 'Annuler' : '✏️ Modifier'}
                     </button>
                     {!editBalance && (

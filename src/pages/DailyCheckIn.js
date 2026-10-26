@@ -11,6 +11,8 @@ import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
 import {auditedMutationsEnabled} from '../components/AuditedCoachAction';
 import DailyValidation from '../components/DailyValidation';
+import ValidatedDayBalance from '../components/ValidatedDayBalance';
+import {readValidatedEntry} from '../utils/validatedBalance';
 
 const MEALS = [
   { key: 'morning', label: 'Matin', emoji: '🌅' },
@@ -61,11 +63,12 @@ export default function DailyCheckIn({ coachMode }) {
 
   const manualFields=useRef(new Set());
   function set(key, val) {
-    if(saving||isLocked)return;
+    if(saving||isLocked||serverValidation)return;
     if(['weight','steps','calories','protein','carbs','fat','sleep'].includes(key))manualFields.current.add(key);
     setForm(p => ({ ...p, [key]: val }));
   }
   function setCheck(goalKey, mealKey, val) {
+    if(saving||isLocked||serverValidation)return;
     setGoalChecks(p => ({ ...p, [goalKey]: { ...(p[goalKey] || {}), [mealKey]: val } }));
   }
 
@@ -116,11 +119,17 @@ export default function DailyCheckIn({ coachMode }) {
 
       // Balance = dailyBalance du dernier jour verrouillé AVANT targetDate
       if (profileData?.coachingMode !== 'intuitif') {
+        if(auditedMutationsEnabled){
+          const last=await readValidatedEntry(currentUser.uid,{beforeDay:targetDate});
+          if(!active)return;
+          setWeekBalance(last?.balanceCalculation?.state==='pending'?null:Math.round(last?.dailyBalance??0));
+        }else{
         const entriesSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(14)));
         if(!active)return;
         const entries = entriesSnap.docs.map(d => d.data()).filter(e => e.date < targetDate);
         const lastLocked = entries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
         setWeekBalance(lastLocked ? Math.round(lastLocked.dailyBalance) : 0);
+        }
       }
       setLoading(false);
       }catch{if(active){setLoadError('Le journal n’a pas pu être chargé. Vérifie ta connexion et recharge la page.');setLoading(false);}}
@@ -269,12 +278,12 @@ export default function DailyCheckIn({ coachMode }) {
       <div className="top-nav">
         <Link to={backUrl} style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => setDayOffset(d => d + 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
+          <button disabled={saving||serverValidation} onClick={() => setDayOffset(d => d + 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
           <div style={{ textAlign: 'center' }}>
             <div className="top-nav-title" style={{ fontSize: 14 }}>{isToday ? "Aujourd'hui" : dateLabel}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{format(subDays(new Date(), dayOffset), 'dd/MM/yyyy')}</div>
           </div>
-          <button onClick={() => setDayOffset(d => Math.max(0, d - 1))} disabled={isToday} style={{ background: 'none', border: 'none', fontSize: 18, cursor: isToday ? 'default' : 'pointer', color: isToday ? 'var(--border)' : 'var(--text-muted)', padding: '0 4px' }}>→</button>
+          <button onClick={() => setDayOffset(d => Math.max(0, d - 1))} disabled={isToday||saving||serverValidation} style={{ background: 'none', border: 'none', fontSize: 18, cursor: isToday ? 'default' : 'pointer', color: isToday ? 'var(--border)' : 'var(--text-muted)', padding: '0 4px' }}>→</button>
         </div>
         <div style={{ width: 24 }} />
       </div>
@@ -327,6 +336,7 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
+        <fieldset disabled={isLocked||saving||serverValidation} style={{border:0,padding:0,margin:0,minWidth:0}}>
         {/* Poids */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>⚖️ Poids</div>
@@ -410,7 +420,8 @@ export default function DailyCheckIn({ coachMode }) {
               <label className="input-label">Calories consommées (kcal)</label>
               <input className="input" type="number" value={form.calories} onChange={e => set('calories', e.target.value)} placeholder={`Objectif ajusté : ${adjustedTarget} kcal`} />
             </div>
-            {form.calories && (
+            {auditedMutationsEnabled&&<ValidatedDayBalance entry={existing}/>}
+            {!auditedMutationsEnabled&&form.calories && (
               <div style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>
                   <span>{form.calories} kcal</span><span>/ {adjustedTarget} kcal</span>
@@ -655,6 +666,7 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
+        </fieldset>
         <button className="btn btn-primary" onClick={handleSave} disabled={saving || isLocked}>
           {saving ? 'Enregistrement...' : isLocked ? '🔒 Journée validée' : '✅ Enregistrer le suivi'}
         </button>
@@ -687,7 +699,11 @@ export default function DailyCheckIn({ coachMode }) {
       )}
 
       {!coachMode && <TabBar />}
-      {serverValidation&&<DailyValidation clientId={currentUser.uid} day={targetDate} onClose={()=>setServerValidation(false)} onSaved={result=>{setServerValidation(false);setIsLocked(true);setWeekBalance(result.breakdown.total);}}/>}
+      {serverValidation&&<DailyValidation clientId={currentUser.uid} day={targetDate} onClose={()=>setServerValidation(false)} onSaved={result=>{
+        setServerValidation(false);setIsLocked(true);
+        setExisting(previous=>({...previous,locked:true,balanceCalculation:result.breakdown,dailyBalance:result.breakdown.total,dailyTarget:result.breakdown.target}));
+        setWeekBalance(result.breakdown.carry);
+      }}/>}
     </div>
   );
 }

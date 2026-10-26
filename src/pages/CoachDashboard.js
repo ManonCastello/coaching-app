@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { collection, getDocs, query, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import CoachToggle from '../components/CoachToggle';
@@ -20,7 +20,10 @@ export default function CoachDashboard() {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   async function loadClients() {
-    const snap = await getDocs(query(collection(db, 'clients'), orderBy('firstName')));
+    const snap = await getDocs(query(
+      collection(db, 'clients'),
+      where('coachIds', 'array-contains', currentUser.uid)
+    ));
     const list = await Promise.all(snap.docs.map(async d => {
       const client = d.data();
       try {
@@ -30,17 +33,21 @@ export default function CoachDashboard() {
         return { ...client, id: d.id, lastEntry: null, checkedInToday: false };
       }
     }));
+    list.sort((a, b) => (a.firstName || '').localeCompare(b.firstName || '', 'fr'));
     setClients(list);
     // Charger les consultations récentes
-    const { collection: colCo, query: qCo, orderBy: obCo, limit: limCo, getDocs: gdCo } = await import('firebase/firestore');
-    const consultQ = qCo(colCo(db, 'consultations'), obCo('updatedAt', 'desc'), limCo(10));
+    const { collection: colCo, query: qCo, where: whereCo, getDocs: gdCo } = await import('firebase/firestore');
+    const consultQ = qCo(colCo(db, 'consultations'), whereCo('coachId', '==', currentUser.uid));
     const consultSnap = await gdCo(consultQ);
-    setConsultations(consultSnap.docs.map(d => d.data()));
+    const recent = consultSnap.docs.map(d => d.data())
+      .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0))
+      .slice(0, 10);
+    setConsultations(recent);
 
     setLoading(false);
   }
 
-  useEffect(() => { loadClients(); }, [today]);
+  useEffect(() => { if (currentUser) loadClients(); }, [today, currentUser]);
 
   async function toggleArchive(clientId, archived) {
     await updateDoc(doc(db, 'clients', clientId), { archived: !archived });

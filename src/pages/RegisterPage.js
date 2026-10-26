@@ -128,6 +128,7 @@ export default function RegisterPage() {
 
       await setDoc(doc(db, 'clients', uid), {
         uid, email: form.email,
+        coachIds: [], primaryCoachId: null,
         firstName: form.firstName, lastName: form.lastName,
         sex: form.sex, dob: form.dob, profession: form.profession,
         weight: +form.weight, height: +form.height,
@@ -150,17 +151,6 @@ export default function RegisterPage() {
         createdAt: serverTimestamp(),
       });
 
-      // Sauvegarder les targets initiales dans l'historique
-      const today = new Date().toISOString().split('T')[0];
-      await setDoc(doc(db, 'clients', uid, 'targetsHistory', today), {
-        calories: calorieTarget,
-        protein: macros.protein, fat: macros.fat, carbs: macros.carbs,
-        steps: +form.stepGoal, sleep: +form.sleepGoal,
-        sessionsPerWeek: +form.sessionsPerWeek,
-        kcalPer1000Steps: 20,
-        sessionCalorieDeficit: 300,
-        validFrom: today,
-      });
       navigate('/dashboard');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') setError('Cet email est déjà utilisé');

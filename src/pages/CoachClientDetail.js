@@ -1,6 +1,7 @@
 // src/pages/CoachClientDetail.js
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, startOfWeek, subDays } from 'date-fns';
@@ -10,11 +11,15 @@ import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS }
 import PhotoViewer from '../components/PhotoViewer';
 import { summarizeWeeklyDays } from '../utils/weeklyEntries';
 import useWeeklyEntries from '../hooks/useWeeklyEntries';
+import CoachAuditHistory from '../components/CoachAuditHistory';
+import AuditedCoachAction, {auditedMutationsEnabled} from '../components/AuditedCoachAction';
 
 export default function CoachClientDetail() {
+  const { currentUser } = useAuth();
   const { clientId } = useParams();
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
+  const [auditRequest, setAuditRequest] = useState(null);
   const [entries, setEntries] = useState([]);
   const { entries: weeklyEntries, setEntries: setWeeklyEntries, error: weeklyError,
     loading: weeklyLoading, refreshing: weeklyRefreshing, source: weeklySource,
@@ -117,11 +122,13 @@ export default function CoachClientDetail() {
           if (Object.keys(gf).length) setGoalsForm(prev => ({ ...prev, ...gf }));
         }
         // Charger la consultation attachée à ce client
-        const { collection: colC, query: qC, where: whereC, getDocs: gdC, limit: limC } = await import('firebase/firestore');
-        const consultQ = qC(colC(db, 'consultations'), whereC('attachedClientId', '==', clientId), limC(1));
+        const { collection: colC, query: qC, where: whereC, getDocs: gdC } = await import('firebase/firestore');
+        const consultQ = qC(colC(db, 'consultations'), whereC('coachId', '==', currentUser.uid));
         const consultSnap = await gdC(consultQ);
-        if (!consultSnap.empty) setClientConsultation(consultSnap.docs[0].data());
-
+        const attachedConsultation = consultSnap.docs
+          .map(item => item.data())
+          .find(item => item.attachedClientId === clientId);
+        if (attachedConsultation) setClientConsultation(attachedConsultation);
       } catch (error) {
         console.error('Impossible de charger la fiche', error);
         setLoadError('La fiche n’a pas pu être chargée complètement. Vérifie ta connexion et tes droits d’accès.');
@@ -130,7 +137,7 @@ export default function CoachClientDetail() {
       }
     }
     load();
-  }, [clientId]);
+  }, [clientId, currentUser]);
 
   async function saveTargets() {
     if (!targetsValidFrom) { alert('Merci de saisir une date de début.'); return; }
@@ -147,6 +154,11 @@ export default function CoachClientDetail() {
         kcalPer1000Steps: +targets.kcalPer1000Steps || 20,
         sessionCalorieDeficit: +targets.sessionCalorieDeficit || 300,
       };
+      if (auditedMutationsEnabled) {
+        setAuditRequest({action: 'setTargets', clientId, expectedRevision: client.auditRevision || 0,
+          patch: newTargets, validFrom: targetsValidFrom, validTo: targetsValidTo || null});
+        return;
+      }
       // Save current targets on the client doc
       await updateDoc(doc(db, 'clients', clientId), { targets: newTargets });
       // Save period to targetsHistory keyed by validFrom date
@@ -160,8 +172,7 @@ export default function CoachClientDetail() {
       setClient(p => ({ ...p, targets: newTargets }));
       setEditTargets(false); setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch(e) { console.error(e); }
-    setSaving(false);
+    } catch(e) { console.error(e); } finally { setSaving(false); }
   }
 
   async function saveFormule(formule) {
@@ -232,6 +243,10 @@ export default function CoachClientDetail() {
     const lastLocked = entries.find(e => e.locked && e.date !== today);
     if (!lastLocked) {
       alert('Aucun jour verrouillé trouvé.');
+      return;
+    }
+    if (auditedMutationsEnabled) {
+      setAuditRequest({action: 'resetBalance', clientId, day: lastLocked.date, expectedRevision: lastLocked.auditRevision || 0});
       return;
     }
     await sd(lastLocked.ref, { dailyBalance: 0 }, { merge: true });
@@ -411,6 +426,7 @@ export default function CoachClientDetail() {
 
   return (
     <div className="app-shell">
+      {auditRequest && <AuditedCoachAction command={auditRequest} onClose={() => setAuditRequest(null)} onSaved={() => window.location.reload()} />}
       <div className="top-nav">
         <Link to="/coach" style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div className="top-nav-title" style={{ fontSize: 15 }}>{client.firstName} {(client.lastName || '').toUpperCase()}</div>
@@ -963,6 +979,7 @@ export default function CoachClientDetail() {
 
 
         )}
+        {auditedMutationsEnabled && activeTab === 'journal' && <CoachAuditHistory clientId={clientId} />}
         {/* JOURNAL */}
         {activeTab === 'journal' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -978,7 +995,12 @@ export default function CoachClientDetail() {
                     {e.weight && <span className="badge badge-primary">{e.weight} kg</span>}
                     {/* Bouton lock/unlock coach */}
                     <button
+                      disabled={auditedMutationsEnabled && !e.locked}
                       onClick={async () => {
+                        if (auditedMutationsEnabled) {
+                          setAuditRequest({action: 'unlockDaily', clientId, day: e.date, expectedRevision: e.auditRevision || 0});
+                          return;
+                        }
                         const { doc: d, setDoc: sd, serverTimestamp: st, collection: col, query: q2, orderBy: ob, getDocs: gd, limit: lim } = await import('firebase/firestore');
                         if (e.locked) {
                           await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: false, dailyBalance: null, dailyTarget: null }, { merge: true });
@@ -1371,7 +1393,7 @@ export default function CoachClientDetail() {
                   <button className="btn btn-secondary" onClick={resetWeekBalance}>
                     🔄 Remettre la balance semaine à zéro
                   </button>
-                  <button className="btn btn-secondary" onClick={recalculerBalances} disabled={saving}>
+                  <button className="btn btn-secondary" onClick={recalculerBalances} disabled={saving || auditedMutationsEnabled}>
                     🔁 Recalculer toutes les balances (targets historiques)
                   </button>
                 </div>

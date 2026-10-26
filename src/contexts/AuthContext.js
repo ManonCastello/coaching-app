@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const coachDoc = await getDoc(doc(db, 'coaches', user.uid));
-        setUserRole(coachDoc.exists() ? 'coach' : 'client');
+        setUserRole(coachDoc.exists() && coachDoc.data().role === 'coach' ? 'coach' : 'client');
         setCurrentUser(user);
       } else {
         setCurrentUser(null);

@@ -258,7 +258,6 @@ export default function WeeklyCheckIn({ coachMode }) {
         weekHighlight: form.weekHighlight,
         weekDifficulty: form.weekDifficulty,
         weekStats: weekStats || null,
-        coachStatus: 'pending',
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setSaved(true);

@@ -1,0 +1,6 @@
+{
+  "storage": [{
+    "bucket": "fitlog-photos-manon-castello-68195",
+    "rules": "storage-private-photos.rules"
+  }]
+}

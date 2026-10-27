@@ -9,6 +9,7 @@ jest.mock('../firebase', () => ({ db: {} }));
 jest.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ currentUser: { uid: 'client-test' } }) }));
 jest.mock('../components/TabBar', () => () => null);
 jest.mock('../components/PhotoViewer', () => () => null);
+jest.mock('firebase/storage',()=>({getStorage:jest.fn(),ref:jest.fn(),uploadBytes:jest.fn(),getBlob:jest.fn(),connectStorageEmulator:jest.fn()}));
 jest.mock('recharts', () => ({
   BarChart: () => null, Bar: () => null, XAxis: () => null, YAxis: () => null,
   ResponsiveContainer: () => null, Tooltip: () => null, ReferenceLine: () => null, Cell: () => null,

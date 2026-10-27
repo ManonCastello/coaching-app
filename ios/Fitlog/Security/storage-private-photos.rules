@@ -1,0 +1,24 @@
+// Candidate only: dedicated private photo bucket; never apply to backup buckets.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function canAccess(clientId) {
+      return signedIn() && (request.auth.uid == clientId || (
+        firestore.get(/databases/(default)/documents/coaches/$(request.auth.uid)).data.role == 'coach' &&
+        request.auth.uid in firestore.get(/databases/(default)/documents/clients/$(clientId)).data.coachIds
+      ));
+    }
+    match /progress/{clientId}/{category}/{photoId} {
+      allow get: if canAccess(clientId);
+      // No directory listings, replacement, metadata update, or deletion by clients.
+      // Changes use a new opaque ID; retention/deletion will be a separate server flow.
+      allow create: if resource == null && canAccess(clientId) && category in ['initial', 'weekly'] &&
+        photoId.matches('[a-f0-9-]{36}[.]jpg') &&
+        request.resource.size > 0 && request.resource.size <= 2 * 1024 * 1024 &&
+        request.resource.contentType == 'image/jpeg' &&
+        request.resource.metadata.keys().hasOnly(['ownerId']) &&
+        request.resource.metadata.ownerId == clientId;
+    }
+  }
+}

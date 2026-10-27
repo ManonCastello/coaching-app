@@ -14,6 +14,8 @@ import useWeeklyEntries from '../hooks/useWeeklyEntries';
 import CoachAuditHistory from '../components/CoachAuditHistory';
 import AuditedCoachAction, {auditedMutationsEnabled} from '../components/AuditedCoachAction';
 import {readValidatedEntry} from '../utils/validatedBalance';
+import ProgressPhoto from '../components/ProgressPhoto';
+import {privatePhotosEnabled,uploadPrivatePhoto} from '../utils/privatePhotos';
 
 export default function CoachClientDetail() {
   const { currentUser } = useAuth();
@@ -289,6 +291,7 @@ export default function CoachClientDetail() {
   }
 
   async function uploadStartPhoto(file, slot) {
+    if(privatePhotosEnabled)return uploadPrivatePhoto(file,{clientId,category:'initial'});
     const CLOUD = 'dduaqnygn'; const PRESET = 'fitlog_photos';
     const ln = (client?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const fn = (client?.firstName || '').toLowerCase().replace(/\s/g, '_');
@@ -303,12 +306,13 @@ export default function CoachClientDetail() {
 
   async function handleStartPhotoSelect(slot, file) {
     if (!file) return;
+    const previous=startPhotos[slot];
     const reader = new FileReader();
     reader.onload = e => setStartPhotos(p => ({ ...p, [slot]: e.target.result }));
-    reader.readAsDataURL(file);
+    if(!privatePhotosEnabled)reader.readAsDataURL(file);
     setUploadingSlot(slot);
     try { const url = await uploadStartPhoto(file, slot); setStartPhotos(p => ({ ...p, [slot]: url })); }
-    catch (e) { console.error(e); }
+    catch (e) { setStartPhotos(p=>({...p,[slot]:previous}));alert(e.message||'La photo n’a pas été enregistrée. Réessaie.'); }
     setUploadingSlot(null);
   }
 
@@ -714,7 +718,7 @@ export default function CoachClientDetail() {
                   {[{key:'face',label:'Face'},{key:'profile',label:'Profil'},{key:'back',label:'Dos'}].map(slot =>
                     latestWeekly.photoURLs[slot.key] ? (
                       <div key={slot.key} style={{ textAlign: 'center' }}>
-                        <img src={latestWeekly.photoURLs[slot.key]} alt={slot.label} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8 }} />
+                        <ProgressPhoto src={latestWeekly.photoURLs[slot.key]} alt={slot.label} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8 }} />
                         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{slot.label}</div>
                       </div>
                     ) : null
@@ -879,7 +883,7 @@ export default function CoachClientDetail() {
                         {[{key:'face',label:'Face'},{key:'profile',label:'Profil'},{key:'back',label:'Dos'}].map(slot =>
                           client.startPhotos[slot.key] ? (
                             <div key={slot.key}>
-                              <img src={client.startPhotos[slot.key]} alt={slot.label} onClick={() => setPhotoViewer({ photoURLs: client.startPhotos, slot: slot.key })} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8, cursor: 'zoom-in' }} />
+                              <ProgressPhoto src={client.startPhotos[slot.key]} alt={slot.label} onClick={() => setPhotoViewer({ photoURLs: client.startPhotos, slot: slot.key })} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8, cursor: 'zoom-in' }} />
                               <p style={{ fontSize: 10, textAlign: 'center', color: 'var(--text-muted)', marginTop: 4 }}>{slot.label}</p>
                             </div>
                           ) : null
@@ -911,9 +915,9 @@ export default function CoachClientDetail() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                     {[{key:'face',label:'Face'},{key:'profile',label:'Profil'},{key:'back',label:'Dos'}].map(slot => (
                       <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                        <div onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()} style={{ width: '100%', aspectRatio: '3/4', borderRadius: 8, border: `2px dashed ${startPhotos[slot.key] ? 'var(--primary)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', background: 'var(--bg)' }}>
+                        <div role="button" tabIndex={0} aria-label={`Choisir la photo ${slot.label}`} aria-disabled={!!uploadingSlot} onKeyDown={e=>{if(e.target===e.currentTarget&&!uploadingSlot&&['Enter',' '].includes(e.key)){e.preventDefault();fileRefs[slot.key].current.click();}}} onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()} style={{ width: '100%', aspectRatio: '3/4', borderRadius: 8, border: `2px dashed ${startPhotos[slot.key] ? 'var(--primary)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', background: 'var(--bg)' }}>
                           {uploadingSlot === slot.key ? <div className="spinner" style={{ width: 24, height: 24 }} />
-                           : startPhotos[slot.key] ? <img src={startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                           : startPhotos[slot.key] ? <ProgressPhoto src={startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                            : <div style={{ textAlign: 'center' }}><div style={{ fontSize: 24, color: 'var(--text-light)' }}>+</div><div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{slot.label}</div></div>}
                         </div>
                         <input ref={fileRefs[slot.key]} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { handleStartPhotoSelect(slot.key, e.target.files[0]); e.target.value = ''; }} />
@@ -1197,7 +1201,7 @@ export default function CoachClientDetail() {
                 {w.photoURLs && Object.values(w.photoURLs).some(u => u) && (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                     {[{key:'face'},{key:'profile'},{key:'back'}].map(slot =>
-                      w.photoURLs[slot.key] ? <img key={slot.key} src={w.photoURLs[slot.key]} alt={slot.key} onClick={() => setPhotoViewer({ photoURLs: w.photoURLs, slot: slot.key })} style={{ width: '30%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 6, cursor: 'zoom-in' }} /> : null
+                      w.photoURLs[slot.key] ? <ProgressPhoto key={slot.key} src={w.photoURLs[slot.key]} alt={slot.key} onClick={() => setPhotoViewer({ photoURLs: w.photoURLs, slot: slot.key })} style={{ width: '30%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 6, cursor: 'zoom-in' }} /> : null
                     )}
                   </div>
                 )}

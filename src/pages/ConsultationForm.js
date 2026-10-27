@@ -1,8 +1,9 @@
 // src/pages/ConsultationForm.js
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -88,6 +89,7 @@ const EMPTY_FORM = {
 };
 
 export default function ConsultationForm() {
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const { consultId } = useParams();
   const [form, setForm] = useState(EMPTY_FORM);
@@ -104,8 +106,14 @@ export default function ConsultationForm() {
   useEffect(() => {
     async function load() {
       // Charger les clients pour l'attachement
-      const snap = await getDocs(query(collection(db, 'clients'), orderBy('lastName')));
-      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.archived));
+      const snap = await getDocs(query(
+        collection(db, 'clients'),
+        where('coachIds', 'array-contains', currentUser.uid)
+      ));
+      const assignedClients = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(c => !c.archived)
+        .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '', 'fr'));
+      setClients(assignedClients);
 
       // Si édition d'une consultation existante
       if (consultId && consultId !== 'new') {
@@ -115,7 +123,7 @@ export default function ConsultationForm() {
       setLoading(false);
     }
     load();
-  }, [consultId]);
+  }, [consultId, currentUser]);
 
   function set(key, val) { setForm(p => ({ ...p, [key]: val })); }
   function setNested(key, subKey, val) { setForm(p => ({ ...p, [key]: { ...p[key], [subKey]: val } })); }
@@ -126,6 +134,7 @@ export default function ConsultationForm() {
       await setDoc(doc(db, 'consultations', stableId), {
         ...form,
         id: stableId,
+        coachId: currentUser.uid,
         finalized: finalize,
         updatedAt: serverTimestamp(),
         createdAt: serverTimestamp(),

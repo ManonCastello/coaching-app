@@ -45,7 +45,7 @@ async function render() {
   await act(async () => root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><WeeklyCheckIn /></MemoryRouter>));
 }
 
-test('sending an edited bilan reopens it for the coach and saves the actual submission ID', async () => {
+test('sending an edited bilan preserves coach feedback and saves the actual submission ID', async () => {
   const bilans = { docs: [doc('2026-10-11', { bilanDate: '2026-10-11', coachStatus: 'done', coachComment: 'Retour précédent', measurements: { waist: 80 } })] };
   getDocsFromServer.mockImplementation(reference => Promise.resolve(typeof reference === 'string' ? bilans : {
     docs: [doc('2026-10-10', { date: '2026-10-10', calories: 1500, protein: 120 }), doc('2026-10-09', { date: '2026-10-09', calories: 0 })],
@@ -58,7 +58,8 @@ test('sending an edited bilan reopens it for the coach and saves the actual subm
   await act(async () => button.click());
   const [path, payload, options] = setDoc.mock.calls[0];
   expect(path).toBe('clients/client-test/weeklyEntries/2026-10-11');
-  expect(payload).toMatchObject({ bilanDate: '2026-10-11', weekStart: '2026-10-04', weekEnd: '2026-10-10', coachStatus: 'pending' });
+  expect(payload).toMatchObject({ bilanDate: '2026-10-11', weekStart: '2026-10-04', weekEnd: '2026-10-10' });
+  expect(payload).not.toHaveProperty('coachStatus');
   expect(payload.weekStats.avgCalories).toBe(1500);
   expect(payload.weekStats.count).toBe(1);
   expect(payload.weekStats.incompleteCount).toBe(1);

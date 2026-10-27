@@ -1,14 +1,18 @@
 // src/pages/DailyCheckIn.js - v2
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocFromServer, runTransaction, collection, query, orderBy, limit, getDocs, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { format, subDays, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
+import {auditedMutationsEnabled} from '../components/AuditedCoachAction';
+import DailyValidation from '../components/DailyValidation';
+import ValidatedDayBalance from '../components/ValidatedDayBalance';
+import {readValidatedEntry} from '../utils/validatedBalance';
 
 const MEALS = [
   { key: 'morning', label: 'Matin', emoji: '🌅' },
@@ -29,6 +33,8 @@ export default function DailyCheckIn({ coachMode }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [serverValidation,setServerValidation]=useState(false);
+  const [loadError,setLoadError]=useState('');
   const [profile, setProfile] = useState(null);
   const [existing, setExisting] = useState(null);
   const [weekGoals, setWeekGoals] = useState(null); // objectifs coach actifs
@@ -55,8 +61,14 @@ export default function DailyCheckIn({ coachMode }) {
     // junkfood: { calories: '' }
   });
 
-  function set(key, val) { setForm(p => ({ ...p, [key]: val })); }
+  const manualFields=useRef(new Set());
+  function set(key, val) {
+    if(saving||isLocked||serverValidation)return;
+    if(['weight','steps','calories','protein','carbs','fat','sleep'].includes(key))manualFields.current.add(key);
+    setForm(p => ({ ...p, [key]: val }));
+  }
   function setCheck(goalKey, mealKey, val) {
+    if(saving||isLocked||serverValidation)return;
     setGoalChecks(p => ({ ...p, [goalKey]: { ...(p[goalKey] || {}), [mealKey]: val } }));
   }
 
@@ -64,12 +76,17 @@ export default function DailyCheckIn({ coachMode }) {
   const [isLocked, setIsLocked] = useState(false);
 
   useEffect(() => {
+    let active=true;
     async function load() {
+      setLoading(true);setLoadError('');
+      try {
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+      if(!active)return;
       let profileData = null;
       if (profileDoc.exists()) {
         const p = profileDoc.data();
         const historicalTargets = await getTargetsForDate(currentUser.uid, targetDate, p.targets || {});
+        if(!active)return;
         profileData = { ...p, targets: historicalTargets };
         setProfile(profileData);
       }
@@ -77,14 +94,16 @@ export default function DailyCheckIn({ coachMode }) {
       // Charger les objectifs hebdo : géré par onSnapshot séparé
 
       const entryDoc = await getDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', targetDate));
+      if(!active)return;
+      manualFields.current.clear();
       if (entryDoc.exists()) {
         const data = entryDoc.data();
         setExisting(data);
         setForm({
-          weight: data.weight || '', steps: data.steps || '',
-          calories: data.calories || '', protein: data.protein || '',
-          carbs: data.carbs || '', fat: data.fat || '',
-          sleep: data.sleep || '', sleepQuality: data.sleepQuality || '',
+          weight: data.weight ?? '', steps: data.steps ?? '',
+          calories: data.calories ?? '', protein: data.protein ?? '',
+          carbs: data.carbs ?? '', fat: data.fat ?? '',
+          sleep: data.sleep ?? '', sleepQuality: data.sleepQuality ?? '',
           didProgramSession: data.didProgramSession ?? null,
           extraActivity: data.extraActivity || '', extraActivityCal: data.extraActivityCal || '',
           notes: data.notes || '', menstruation: data.menstruation || false,
@@ -92,6 +111,7 @@ export default function DailyCheckIn({ coachMode }) {
         if (data.goalChecks) setGoalChecks(data.goalChecks);
         setIsLocked(data.locked || false);
       } else {
+        setIsLocked(false);
         setExisting(null);
         setForm({ weight: '', steps: '', calories: '', protein: '', carbs: '', fat: '', sleep: '', sleepQuality: '', didProgramSession: null, extraActivity: '', extraActivityCal: '', notes: '', menstruation: false });
         setGoalChecks({});
@@ -99,14 +119,23 @@ export default function DailyCheckIn({ coachMode }) {
 
       // Balance = dailyBalance du dernier jour verrouillé AVANT targetDate
       if (profileData?.coachingMode !== 'intuitif') {
+        if(auditedMutationsEnabled){
+          const last=await readValidatedEntry(currentUser.uid,{beforeDay:targetDate});
+          if(!active)return;
+          setWeekBalance(last?.balanceCalculation?.state==='pending'?null:Math.round(last?.dailyBalance??0));
+        }else{
         const entriesSnap = await getDocs(query(collection(db, 'clients', currentUser.uid, 'dailyEntries'), orderBy('date', 'desc'), limit(14)));
+        if(!active)return;
         const entries = entriesSnap.docs.map(d => d.data()).filter(e => e.date < targetDate);
         const lastLocked = entries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
         setWeekBalance(lastLocked ? Math.round(lastLocked.dailyBalance) : 0);
+        }
       }
       setLoading(false);
+      }catch{if(active){setLoadError('Le journal n’a pas pu être chargé. Vérifie ta connexion et recharge la page.');setLoading(false);}}
     }
     load();
+    return()=>{active=false;};
   }, [currentUser.uid, targetDate]);
 
   // Écoute temps réel des objectifs hebdo
@@ -124,6 +153,7 @@ export default function DailyCheckIn({ coachMode }) {
   }, [currentUser.uid]);
 
   async function handleLock() {
+    if(auditedMutationsEnabled){if(await handleSave())setServerValidation(true);return;}
     if (!window.confirm('Valider définitivement cette journée ? Les valeurs seront figées.')) return;
     const dateToLock = targetDate; // figer la date au moment du clic
     const t = profile?.targets || {};
@@ -149,14 +179,15 @@ export default function DailyCheckIn({ coachMode }) {
   async function handleSave() {
     if (isLocked) {
       alert('Cette journée est validée. Contacte ta coach pour la déverrouiller.');
-      return;
+      return false;
     }
     const dateToSave = targetDate; // figer la date au moment du clic
     setSaving(true);
+    let success=false;
     try {
       const t = profile?.targets || {};
-      const calories = form.calories ? +form.calories : 0;
-      const steps = form.steps ? +form.steps : 0;
+      const calories = form.calories === '' ? (auditedMutationsEnabled?null:0) : +form.calories;
+      const steps = form.steps === '' ? (auditedMutationsEnabled?null:0) : +form.steps;
       const extraActivityCal = form.extraActivityCal ? +form.extraActivityCal : 0;
       const stepBonus = Math.round(((steps - (t.steps || 10000)) / 1000) * (t.kcalPer1000Steps || 20));
       const sessionDef = form.didProgramSession === false ? -(t.sessionCalorieDeficit || 300) : 0;
@@ -164,15 +195,15 @@ export default function DailyCheckIn({ coachMode }) {
       const carryOver = weekBalance || 0;
       const dailyBalance = calories > 0 ? (calories - dailyTarget) + carryOver : null;
 
-      await setDoc(doc(db, 'clients', currentUser.uid, 'dailyEntries', dateToSave), {
+      const patch={
         date: dateToSave,
-        weight: form.weight ? +form.weight : null,
+        weight: form.weight !== '' ? +form.weight : null,
         steps,
         calories,
-        protein: form.protein ? +form.protein : 0,
-        carbs: form.carbs ? +form.carbs : 0,
-        fat: form.fat ? +form.fat : 0,
-        sleep: form.sleep ? +form.sleep : null,
+        protein: form.protein === '' ? (auditedMutationsEnabled?null:0) : +form.protein,
+        carbs: form.carbs === '' ? (auditedMutationsEnabled?null:0) : +form.carbs,
+        fat: form.fat === '' ? (auditedMutationsEnabled?null:0) : +form.fat,
+        sleep: form.sleep !== '' ? +form.sleep : null,
         sleepQuality: form.sleepQuality ? +form.sleepQuality : null,
         didProgramSession: form.didProgramSession,
         extraActivity: form.extraActivity,
@@ -180,21 +211,39 @@ export default function DailyCheckIn({ coachMode }) {
         notes: form.notes,
         menstruation: form.menstruation || false,
         goalChecks,
-        dailyTarget,
-        dailyBalance,
+        dailyTarget:auditedMutationsEnabled?null:dailyTarget,
+        dailyBalance:auditedMutationsEnabled?null:dailyBalance,
         updatedAt: serverTimestamp(),
-      }, { merge: true });
+      };
+      const ref=doc(db,'clients',currentUser.uid,'dailyEntries',dateToSave);
+      if(auditedMutationsEnabled){
+        patch.programSessionStatus=form.didProgramSession===true?'completed':form.didProgramSession===false?'missed':'notPlanned';
+        await runTransaction(db,async transaction=>{
+          const snapshot=await transaction.get(ref),current=snapshot.data();
+          const version=value=>value?`${value.seconds}:${value.nanoseconds}`:null;
+          if(current?.locked||snapshot.exists()!==!!existing||version(current?.updatedAt)!==version(existing?.updatedAt)||(current?.auditRevision??0)!==(existing?.auditRevision??0))throw new Error('La journée a changé. Recharge-la avant de réessayer.');
+          // Web edits must not later be overwritten by a HealthKit refresh.
+          const changed=['weight','steps','calories','protein','carbs','fat','sleep'].filter(key=>manualFields.current.has(key)||(patch[key]??null)!==(existing?.[key]??null));
+          patch.healthManualOverrides=[...new Set([...(current?.healthManualOverrides||[]),...changed])];
+          patch.healthImportedValues=Object.fromEntries(Object.entries(current?.healthImportedValues||{}).filter(([key])=>!changed.includes(key)));
+          transaction.set(ref,patch,{mergeFields:Object.keys(patch)});
+        });
+        const fresh=await getDocFromServer(ref);setExisting(fresh.data());manualFields.current.clear();
+      }else await setDoc(ref,patch,{merge:true});
+      success=true;
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       // On reste sur la page pour permettre le verrouillage
     } catch(e) {
       console.error(e);
-      alert('Erreur lors de l\'enregistrement. Vérifie ta connexion.');
+      alert(auditedMutationsEnabled?e.message:'Erreur lors de l\'enregistrement. Vérifie ta connexion.');
     }
     setSaving(false);
+    return success;
   }
 
   if (loading) return <div className="app-shell"><div className="loading"><div className="spinner" /></div></div>;
+  if(loadError)return <div className="app-shell"><p role="alert">{loadError}</p><button onClick={()=>window.location.reload()}>Recharger le journal</button></div>;
 
   const targets = profile?.targets || {};
   const isIntuitif = profile?.coachingMode === 'intuitif';
@@ -229,12 +278,12 @@ export default function DailyCheckIn({ coachMode }) {
       <div className="top-nav">
         <Link to={backUrl} style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => setDayOffset(d => d + 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
+          <button disabled={saving||serverValidation} onClick={() => setDayOffset(d => d + 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>←</button>
           <div style={{ textAlign: 'center' }}>
             <div className="top-nav-title" style={{ fontSize: 14 }}>{isToday ? "Aujourd'hui" : dateLabel}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{format(subDays(new Date(), dayOffset), 'dd/MM/yyyy')}</div>
           </div>
-          <button onClick={() => setDayOffset(d => Math.max(0, d - 1))} disabled={isToday} style={{ background: 'none', border: 'none', fontSize: 18, cursor: isToday ? 'default' : 'pointer', color: isToday ? 'var(--border)' : 'var(--text-muted)', padding: '0 4px' }}>→</button>
+          <button onClick={() => setDayOffset(d => Math.max(0, d - 1))} disabled={isToday||saving||serverValidation} style={{ background: 'none', border: 'none', fontSize: 18, cursor: isToday ? 'default' : 'pointer', color: isToday ? 'var(--border)' : 'var(--text-muted)', padding: '0 4px' }}>→</button>
         </div>
         <div style={{ width: 24 }} />
       </div>
@@ -242,7 +291,7 @@ export default function DailyCheckIn({ coachMode }) {
       <div className="page">
 
         {/* Balance calorique — mode tracking uniquement */}
-        {!isIntuitif && weekBalance !== null && (
+        {!auditedMutationsEnabled && !isIntuitif && weekBalance !== null && (
           <div style={{
             background: weekBalance > 0 ? 'var(--warning-light)' : weekBalance < -200 ? 'var(--success-light)' : 'var(--primary-bg)',
             border: `1px solid ${weekBalance > 0 ? 'var(--warning)' : weekBalance < -200 ? 'var(--success)' : 'var(--primary-light)'}`,
@@ -287,6 +336,7 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
+        <fieldset disabled={isLocked||saving||serverValidation} style={{border:0,padding:0,margin:0,minWidth:0}}>
         {/* Poids */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>⚖️ Poids</div>
@@ -370,7 +420,8 @@ export default function DailyCheckIn({ coachMode }) {
               <label className="input-label">Calories consommées (kcal)</label>
               <input className="input" type="number" value={form.calories} onChange={e => set('calories', e.target.value)} placeholder={`Objectif ajusté : ${adjustedTarget} kcal`} />
             </div>
-            {form.calories && (
+            {auditedMutationsEnabled&&<ValidatedDayBalance entry={existing}/>}
+            {!auditedMutationsEnabled&&form.calories && (
               <div style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>
                   <span>{form.calories} kcal</span><span>/ {adjustedTarget} kcal</span>
@@ -615,13 +666,14 @@ export default function DailyCheckIn({ coachMode }) {
           </div>
         )}
 
+        </fieldset>
         <button className="btn btn-primary" onClick={handleSave} disabled={saving || isLocked}>
           {saving ? 'Enregistrement...' : isLocked ? '🔒 Journée validée' : '✅ Enregistrer le suivi'}
         </button>
 
         {!isLocked && existing && (
           <button
-            onClick={handleLock}
+            onClick={handleLock} disabled={saving}
             style={{ width: '100%', padding: '12px', marginTop: 10, background: 'none', border: '1.5px solid #22C55E', color: '#16A34A', borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             🔒 Valider définitivement la journée
           </button>
@@ -647,6 +699,11 @@ export default function DailyCheckIn({ coachMode }) {
       )}
 
       {!coachMode && <TabBar />}
+      {serverValidation&&<DailyValidation clientId={currentUser.uid} day={targetDate} onClose={()=>setServerValidation(false)} onSaved={result=>{
+        setServerValidation(false);setIsLocked(true);
+        setExisting(previous=>({...previous,locked:true,balanceCalculation:result.breakdown,dailyBalance:result.breakdown.total,dailyTarget:result.breakdown.target}));
+        setWeekBalance(result.breakdown.carry);
+      }}/>}
     </div>
   );
 }

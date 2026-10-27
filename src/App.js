@@ -14,6 +14,7 @@ import CoachClientDetail from './pages/CoachClientDetail';
 import ProgressPage from './pages/ProgressPage';
 import MealPlan from './pages/MealPlan';
 import ConsultationForm from './pages/ConsultationForm';
+import InvitationPage from './pages/InvitationPage';
 
 import './styles/global.css';
 
@@ -38,6 +39,7 @@ function AppRoutes() {
           : <LoginPage />
       } />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/invitation/:token" element={<InvitationPage />} />
 
       {/* Client / Coach-as-athlete routes */}
       <Route path="/dashboard" element={<PrivateRoute><ClientDashboard /></PrivateRoute>} />

@@ -1,6 +1,6 @@
 // src/pages/LoginPage.js
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 
@@ -13,13 +13,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location=useLocation();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
       await login(email, password);
-      navigate('/dashboard');
+      navigate(/^\/invitation\/[a-f0-9]{64}$/.test(location.state?.next??'')?location.state.next:'/dashboard');
     } catch {
       setError('Email ou mot de passe incorrect');
     }

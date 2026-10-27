@@ -1,9 +1,10 @@
 // src/pages/RegisterPage.js
 import React, { useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import {useAuth} from '../contexts/AuthContext';
 import { calculateBMR, calculateTDEE, calculateCalorieTarget, calculateMacros, calculateAgeFromDOB, ACTIVITY_LEVELS, GOALS, WEEK_DAYS } from '../utils/calculations';
 
 const CLOUDINARY_CLOUD = 'dduaqnygn';
@@ -27,7 +28,9 @@ const PHOTO_SLOTS = [
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
+  const location=useLocation();
+  const {currentUser}=useAuth();
+  const [step, setStep] = useState(currentUser?1:0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState(null);
@@ -35,7 +38,7 @@ export default function RegisterPage() {
   const fileRefs = { face: useRef(), profile: useRef(), back: useRef() };
 
   const [form, setForm] = useState({
-    email: '', password: '', confirmPassword: '',
+    email: currentUser?.email??'', password: '', confirmPassword: '',
     firstName: '', lastName: '', sex: 'F',
     dob: '', profession: '',
     weight: '', height: '',
@@ -55,12 +58,14 @@ export default function RegisterPage() {
 
   function validateStep() {
     if (step === 0) {
+      if(currentUser)return null;
       if (!form.email || !form.password || !form.confirmPassword) return 'Tous les champs sont requis';
       if (form.password.length < 6) return 'Mot de passe trop court (min. 6 caractères)';
       if (form.password !== form.confirmPassword) return 'Les mots de passe ne correspondent pas';
     }
     if (step === 1) {
       if (!form.firstName || !form.lastName || !form.dob) return 'Tous les champs sont requis';
+      if(!Number.isFinite(calculateAgeFromDOB(form.dob))||calculateAgeFromDOB(form.dob)<18)return 'Fitlog est réservé aux adultes de 18 ans et plus.';
     }
     if (step === 2) {
       if (!form.weight || !form.height) return 'Poids et taille sont requis';
@@ -114,8 +119,10 @@ export default function RegisterPage() {
     setError(''); setLoading(true);
     try {
       const { bmr, tdee, calorieTarget, macros } = getCalcs();
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      const uid = cred.user.uid;
+      if(!form.firstName.trim()||!form.lastName.trim()||!form.dob||calculateAgeFromDOB(form.dob)<18||![bmr,tdee,calorieTarget,+form.weight,+form.height].every(value=>Number.isFinite(value)&&value>0))throw new Error('Vérifie ton identité, ta date de naissance, ton poids et ta taille. Fitlog est réservé aux adultes.');
+      const existingUser=auth.currentUser;
+      if(existingUser&&existingUser.email?.toLowerCase()!==form.email.trim().toLowerCase())throw new Error('Utilise l’adresse du compte connecté.');
+      const uid=existingUser?.uid??(await createUserWithEmailAndPassword(auth, form.email, form.password)).user.uid;
 
       const startMeasurements = {
         waist: form.startWaist ? +form.startWaist : null,
@@ -126,8 +133,9 @@ export default function RegisterPage() {
       };
       const hasAnyMeasure = Object.values(startMeasurements).some(v => v !== null);
 
-      await setDoc(doc(db, 'clients', uid), {
+      const profile={
         uid, email: form.email,
+        coachIds: [], primaryCoachId: null,
         firstName: form.firstName, lastName: form.lastName,
         sex: form.sex, dob: form.dob, profession: form.profession,
         weight: +form.weight, height: +form.height,
@@ -148,23 +156,17 @@ export default function RegisterPage() {
         weeklyBilanDay: +form.weeklyBilanDay,
         coachingMode: form.coachingMode || 'tracking',
         createdAt: serverTimestamp(),
+      };
+      await runTransaction(db,async transaction=>{
+        const ref=doc(db,'clients',uid),snapshot=await transaction.get(ref);
+        // Retrying profile creation must never overwrite an existing real follow-up.
+        if(!snapshot.exists())transaction.set(ref,profile);
       });
 
-      // Sauvegarder les targets initiales dans l'historique
-      const today = new Date().toISOString().split('T')[0];
-      await setDoc(doc(db, 'clients', uid, 'targetsHistory', today), {
-        calories: calorieTarget,
-        protein: macros.protein, fat: macros.fat, carbs: macros.carbs,
-        steps: +form.stepGoal, sleep: +form.sleepGoal,
-        sessionsPerWeek: +form.sessionsPerWeek,
-        kcalPer1000Steps: 20,
-        sessionCalorieDeficit: 300,
-        validFrom: today,
-      });
-      navigate('/dashboard');
+      navigate(/^\/invitation\/[a-f0-9]{64}$/.test(location.state?.next??'')?location.state.next:'/dashboard');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') setError('Cet email est déjà utilisé');
-      else setError('Erreur lors de l\'inscription');
+      else setError(err.code?'La fiche n’a pas pu être créée. Tu peux réessayer sans recréer ton compte.':err.message);
     }
     setLoading(false);
   }

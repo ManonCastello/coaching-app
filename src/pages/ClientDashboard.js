@@ -11,6 +11,9 @@ import { getTargetsForDate } from '../utils/getTargetsForDate';
 import CoachToggle from '../components/CoachToggle';
 import useWeeklyEntries from '../hooks/useWeeklyEntries';
 import { wasSubmittedToday } from '../utils/weeklyEntries';
+import CoachAuditHistory from '../components/CoachAuditHistory';
+import { auditedMutationsEnabled } from '../components/AuditedCoachAction';
+import {readValidatedEntry} from '../utils/validatedBalance';
 
 export default function ClientDashboard() {
   const { currentUser, logout, userRole, coachMode, switchMode } = useAuth();
@@ -19,6 +22,7 @@ export default function ClientDashboard() {
   const [todayEntry, setTodayEntry] = useState(null);
   const [recentEntries, setRecentEntries] = useState([]);
   const [weekBalance, setWeekBalance] = useState(null);
+  const [balancePending,setBalancePending]=useState(false);
   const [weekGoals, setWeekGoals] = useState(null);
   const [todayGoalChecks, setTodayGoalChecks] = useState(null);
   const [allEntries, setAllEntries] = useState([]);
@@ -58,10 +62,16 @@ export default function ClientDashboard() {
       if (!wgSnap.empty) setWeekGoals(wgSnap.docs[0].data());
 
       if ((p.coachingMode || 'tracking') !== 'intuitif') {
+        if(auditedMutationsEnabled){
+          const last=await readValidatedEntry(currentUser.uid,{throughDay:today});
+          const pending=last?.balanceCalculation?.state==='pending';
+          setBalancePending(pending);setWeekBalance(pending?null:Math.round(last?.dailyBalance??0));
+        }else{
         const todayStr = format(new Date(), 'yyyy-MM-dd');
         const prevEntries = entries.filter(e => e.date !== todayStr);
         const lastLocked = prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
         setWeekBalance(lastLocked ? Math.round(lastLocked.dailyBalance) : 0);
+        }
       }
     } catch (e) { console.error('loadData error:', e); }
     setLoading(false);
@@ -189,14 +199,14 @@ export default function ClientDashboard() {
                 <div className="stat-label">Poids du jour</div>
                 <div className="stat-value" style={{ color: 'var(--primary)' }}>{todayWeight || '—'}<span className="stat-unit">kg</span></div>
               </div>
-              {(profile.coachingMode || 'tracking') !== 'intuitif' && weekBalance !== null && (
+              {(profile.coachingMode || 'tracking') !== 'intuitif' && (weekBalance !== null||balancePending) && (
                 <div className="stat-card" style={{ border: '1.5px solid ' + balanceColor + '20' }}>
-                  <div className="stat-label">Balance semaine</div>
+                  <div className="stat-label">{auditedMutationsEnabled?'Solde validé':'Balance semaine'}</div>
                   <div className="stat-value" style={{ color: balanceColor, fontSize: 20 }}>
-                    {weekBalance > 0 ? '+' : ''}{weekBalance}<span className="stat-unit">kcal</span>
+                    {balancePending?'En attente':<>{weekBalance > 0 ? '+' : ''}{weekBalance}<span className="stat-unit">kcal</span></>}
                   </div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
-                    {weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
+                    {balancePending?'Une journée précédente a été rouverte.':weekBalance > 200 ? 'Au-dessus' : weekBalance < -200 ? 'En dessous' : '✅ Dans la cible'}
                   </div>
                 </div>
               )}
@@ -385,6 +395,12 @@ export default function ClientDashboard() {
         )}
 
       </div>
+      {auditedMutationsEnabled && <div className="page">
+        <details>
+          <summary style={{cursor:'pointer', fontWeight:700, padding:'12px 0'}}>📝 Les mises à jour de ma coach</summary>
+          <CoachAuditHistory clientId={currentUser.uid} audience="student" hideValues={profile.coachingMode === 'intuitif'} />
+        </details>
+      </div>}
       <TabBar />
     </div>
   );

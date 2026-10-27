@@ -1,6 +1,7 @@
 // src/pages/CoachClientDetail.js
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { format, startOfWeek, subDays } from 'date-fns';
@@ -10,11 +11,16 @@ import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS }
 import PhotoViewer from '../components/PhotoViewer';
 import { summarizeWeeklyDays } from '../utils/weeklyEntries';
 import useWeeklyEntries from '../hooks/useWeeklyEntries';
+import CoachAuditHistory from '../components/CoachAuditHistory';
+import AuditedCoachAction, {auditedMutationsEnabled} from '../components/AuditedCoachAction';
+import {readValidatedEntry} from '../utils/validatedBalance';
 
 export default function CoachClientDetail() {
+  const { currentUser } = useAuth();
   const { clientId } = useParams();
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
+  const [auditRequest, setAuditRequest] = useState(null);
   const [entries, setEntries] = useState([]);
   const { entries: weeklyEntries, setEntries: setWeeklyEntries, error: weeklyError,
     loading: weeklyLoading, refreshing: weeklyRefreshing, source: weeklySource,
@@ -35,6 +41,7 @@ export default function CoachClientDetail() {
   const [notesForm, setNotesForm] = useState('');
   const [editBalance, setEditBalance] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
+  const [validatedEntry,setValidatedEntry]=useState(null);
   const [editingCoachComment, setEditingCoachComment] = useState(null);
   const [coachCommentForm, setCoachCommentForm] = useState('');
   const [infoForm, setInfoForm] = useState({});
@@ -105,6 +112,7 @@ export default function CoachClientDetail() {
         const dailyQ = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(30));
         const dailySnap = await getDocs(dailyQ);
         setEntries(dailySnap.docs.map(d => d.data()).reverse());
+        if(auditedMutationsEnabled)setValidatedEntry(await readValidatedEntry(clientId,{throughDay:format(new Date(),'yyyy-MM-dd')}));
         // Charger objectifs hebdo
         const wgQ = query(collection(db, 'clients', clientId, 'weekGoals'), orderBy('weekStart', 'desc'), limit(1));
         const wgSnap = await getDocs(wgQ);
@@ -117,11 +125,13 @@ export default function CoachClientDetail() {
           if (Object.keys(gf).length) setGoalsForm(prev => ({ ...prev, ...gf }));
         }
         // Charger la consultation attachée à ce client
-        const { collection: colC, query: qC, where: whereC, getDocs: gdC, limit: limC } = await import('firebase/firestore');
-        const consultQ = qC(colC(db, 'consultations'), whereC('attachedClientId', '==', clientId), limC(1));
+        const { collection: colC, query: qC, where: whereC, getDocs: gdC } = await import('firebase/firestore');
+        const consultQ = qC(colC(db, 'consultations'), whereC('coachId', '==', currentUser.uid));
         const consultSnap = await gdC(consultQ);
-        if (!consultSnap.empty) setClientConsultation(consultSnap.docs[0].data());
-
+        const attachedConsultation = consultSnap.docs
+          .map(item => item.data())
+          .find(item => item.attachedClientId === clientId);
+        if (attachedConsultation) setClientConsultation(attachedConsultation);
       } catch (error) {
         console.error('Impossible de charger la fiche', error);
         setLoadError('La fiche n’a pas pu être chargée complètement. Vérifie ta connexion et tes droits d’accès.');
@@ -130,7 +140,7 @@ export default function CoachClientDetail() {
       }
     }
     load();
-  }, [clientId]);
+  }, [clientId, currentUser]);
 
   async function saveTargets() {
     if (!targetsValidFrom) { alert('Merci de saisir une date de début.'); return; }
@@ -147,6 +157,11 @@ export default function CoachClientDetail() {
         kcalPer1000Steps: +targets.kcalPer1000Steps || 20,
         sessionCalorieDeficit: +targets.sessionCalorieDeficit || 300,
       };
+      if (auditedMutationsEnabled) {
+        setAuditRequest({action: 'setTargets', clientId, expectedRevision: client.auditRevision || 0,
+          patch: newTargets, validFrom: targetsValidFrom, validTo: targetsValidTo || null});
+        return;
+      }
       // Save current targets on the client doc
       await updateDoc(doc(db, 'clients', clientId), { targets: newTargets });
       // Save period to targetsHistory keyed by validFrom date
@@ -160,8 +175,7 @@ export default function CoachClientDetail() {
       setClient(p => ({ ...p, targets: newTargets }));
       setEditTargets(false); setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch(e) { console.error(e); }
-    setSaving(false);
+    } catch(e) { console.error(e); } finally { setSaving(false); }
   }
 
   async function saveFormule(formule) {
@@ -223,7 +237,15 @@ export default function CoachClientDetail() {
   }
 
   async function resetWeekBalance() {
-    if (!window.confirm('Remettre la balance à zéro ?')) return;
+    if(auditedMutationsEnabled){
+      try{
+        const last=await readValidatedEntry(clientId,{throughDay:format(new Date(),'yyyy-MM-dd')});
+        if(!last){alert('Aucune journée validée trouvée.');return;}
+        setAuditRequest({action:'resetBalance',clientId,day:last.date,expectedRevision:last.auditRevision??0});
+      }catch{alert('Le solde n’a pas pu être chargé. Vérifie ta connexion avant de réessayer.');}
+      return;
+    }
+    if (!auditedMutationsEnabled && !window.confirm('Remettre la balance à zéro ?')) return;
     const { collection, query, orderBy, limit, getDocs, doc: d, setDoc: sd, serverTimestamp: st } = await import('firebase/firestore');
     const q = query(collection(db, 'clients', clientId, 'dailyEntries'), orderBy('date', 'desc'), limit(14));
     const snap = await getDocs(q);
@@ -398,8 +420,8 @@ export default function CoachClientDetail() {
   // Balance semaine : dailyBalance du dernier jour verrouillé (hors aujourd'hui)
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const prevEntries = [...entries].sort((a,b) => b.date.localeCompare(a.date)).filter(e => e.date !== todayStr);
-  const lastLocked = prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
-  const coachWeekBalance = lastLocked ? Math.round(lastLocked.dailyBalance) : 0;
+  const lastLocked = auditedMutationsEnabled?validatedEntry:prevEntries.find(e => e.locked && e.dailyBalance !== null && e.dailyBalance !== undefined);
+  const coachWeekBalance = lastLocked?.balanceCalculation?.state==='pending'?null:lastLocked ? Math.round(lastLocked.dailyBalance) : 0;
 
   const tabs = [
     { key: 'overview', label: '📊 Vue' },
@@ -411,6 +433,7 @@ export default function CoachClientDetail() {
 
   return (
     <div className="app-shell">
+      {auditRequest && <AuditedCoachAction command={auditRequest} onClose={() => setAuditRequest(null)} onSaved={() => window.location.reload()} />}
       <div className="top-nav">
         <Link to="/coach" style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div className="top-nav-title" style={{ fontSize: 15 }}>{client.firstName} {(client.lastName || '').toUpperCase()}</div>
@@ -496,15 +519,15 @@ export default function CoachClientDetail() {
               <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editBalance ? 12 : 0 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>⚖️ Balance calorique semaine</div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>⚖️ {auditedMutationsEnabled?'Solde validé':'Balance calorique semaine'}</div>
                     {!editBalance && (
                       <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: coachWeekBalance > 200 ? 'var(--warning)' : coachWeekBalance < -200 ? 'var(--danger)' : 'var(--success)' }}>
-                        {coachWeekBalance > 0 ? '+' : ''}{coachWeekBalance} kcal
+                        {coachWeekBalance===null?'En attente':`${coachWeekBalance > 0 ? '+' : ''}${coachWeekBalance} kcal`}
                       </div>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setEditBalance(!editBalance); setBalanceInput(String(coachWeekBalance)); }}>
+                    <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => { setEditBalance(!editBalance); setBalanceInput(coachWeekBalance===null?'':String(coachWeekBalance)); }}>
                       {editBalance ? 'Annuler' : '✏️ Modifier'}
                     </button>
                     {!editBalance && (
@@ -519,6 +542,11 @@ export default function CoachClientDetail() {
                     <input className="input" type="number" value={balanceInput} onChange={e => setBalanceInput(e.target.value)} style={{ flex: 1 }} placeholder="ex: -200" />
                     <button className="btn btn-primary" style={{ width: 'auto' }} onClick={async () => {
                       if (!lastLocked) return;
+                      if (auditedMutationsEnabled) {
+                        if (!balanceInput.trim() || !Number.isFinite(Number(balanceInput))) return;
+                        setAuditRequest({action: 'setBalance', clientId, day: lastLocked.date, expectedRevision: lastLocked.auditRevision || 0, patch: {dailyBalance: Number(balanceInput)}});
+                        return;
+                      }
                       const { doc: d, setDoc: sd } = await import('firebase/firestore');
                       await sd(d(db, 'clients', clientId, 'dailyEntries', lastLocked.date), { dailyBalance: +balanceInput }, { merge: true });
                       setEntries(prev => prev.map(e => e.date === lastLocked.date ? { ...e, dailyBalance: +balanceInput } : e));
@@ -963,6 +991,7 @@ export default function CoachClientDetail() {
 
 
         )}
+        {auditedMutationsEnabled && activeTab === 'journal' && <CoachAuditHistory clientId={clientId} />}
         {/* JOURNAL */}
         {activeTab === 'journal' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -978,7 +1007,12 @@ export default function CoachClientDetail() {
                     {e.weight && <span className="badge badge-primary">{e.weight} kg</span>}
                     {/* Bouton lock/unlock coach */}
                     <button
+                      disabled={auditedMutationsEnabled && !e.locked}
                       onClick={async () => {
+                        if (auditedMutationsEnabled) {
+                          setAuditRequest({action: 'unlockDaily', clientId, day: e.date, expectedRevision: e.auditRevision || 0});
+                          return;
+                        }
                         const { doc: d, setDoc: sd, serverTimestamp: st, collection: col, query: q2, orderBy: ob, getDocs: gd, limit: lim } = await import('firebase/firestore');
                         if (e.locked) {
                           await sd(d(db, 'clients', clientId, 'dailyEntries', e.date), { locked: false, dailyBalance: null, dailyTarget: null }, { merge: true });
@@ -1371,7 +1405,7 @@ export default function CoachClientDetail() {
                   <button className="btn btn-secondary" onClick={resetWeekBalance}>
                     🔄 Remettre la balance semaine à zéro
                   </button>
-                  <button className="btn btn-secondary" onClick={recalculerBalances} disabled={saving}>
+                  <button className="btn btn-secondary" onClick={recalculerBalances} disabled={saving || auditedMutationsEnabled}>
                     🔁 Recalculer toutes les balances (targets historiques)
                   </button>
                 </div>

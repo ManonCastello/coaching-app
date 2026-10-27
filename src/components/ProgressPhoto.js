@@ -16,7 +16,11 @@ export default function ProgressPhoto({src,alt,...props}){
     readPhotoBlob({kind:'fitlog-private-photo',version:1,bucket,path}).then(blob=>{
       if(!active||auth.currentUser?.uid!==uid)return;
       url=URL.createObjectURL(blob);setResult({key,url});
-    }).catch(()=>{if(active&&auth.currentUser?.uid===uid)setResult({key,error:true});});
+    }).catch(error=>{
+      // Codes only: never log object paths, download URLs, tokens or pupil data.
+      console.warn('Fitlog photo read failed:',error?.code||'unknown');
+      if(active&&auth.currentUser?.uid===uid)setResult({key,error:true});
+    });
     return()=>{active=false;if(url)URL.revokeObjectURL(url);};
   },[key,uid,privatePhoto,bucket,path,retry]);
   if(src&&typeof src==='object'&&!privatePhoto)return <span role="alert">Photo indisponible</span>;

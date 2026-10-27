@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://coaching-app-ten-tau.vercel.app"],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length"],
+    "maxAgeSeconds": 300
+  }
+]

@@ -9,6 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLin
 import { fr } from 'date-fns/locale';
 import TabBar from '../components/TabBar';
 import PhotoViewer from '../components/PhotoViewer';
+import ProgressPhoto from '../components/ProgressPhoto';
+import {privatePhotosEnabled,uploadPrivatePhoto,isSavedPhoto} from '../utils/privatePhotos';
 import { readWeeklyEntries, summarizeWeeklyDays } from '../utils/weeklyEntries';
 
 const CLOUDINARY_CLOUD = 'dduaqnygn';
@@ -158,6 +160,7 @@ export default function WeeklyCheckIn({ coachMode }) {
     return () => { active = false; };
   }, [currentUser.uid, weekOffset, todayStr]);
   async function uploadToCloudinary(file, slot, clientProfile) {
+    if(privatePhotosEnabled)return uploadPrivatePhoto(file,{clientId:currentUser.uid,category:'weekly'});
     const lastName = (clientProfile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const firstName = (clientProfile?.firstName || '').toLowerCase().replace(/\s/g, '_');
     const publicId = `fitlog/${currentUser.uid}/${weekKey}_${lastName}_${firstName}_${slot}_${Date.now()}`;
@@ -199,20 +202,22 @@ export default function WeeklyCheckIn({ coachMode }) {
 
   async function handlePhotoSelect(slot, file) {
     if (!file) return;
+    const previous=photoURLs[slot];
     // Preview immédiat
     const reader = new FileReader();
     reader.onload = e => setPhotoURLs(p => ({ ...p, [slot]: e.target.result }));
-    reader.readAsDataURL(file);
+    if(!privatePhotosEnabled)reader.readAsDataURL(file);
 
     // Upload Cloudinary avec compression
     setUploadingSlots(prev => new Set([...prev, slot]));
     try {
-      const compressed = await compressImage(file);
+      const compressed = privatePhotosEnabled?file:await compressImage(file);
       const profileDoc = await getDoc(doc(db, 'clients', currentUser.uid));
       const profile = profileDoc.exists() ? profileDoc.data() : {};
       const url = await uploadToCloudinary(compressed, slot, profile);
       setPhotoURLs(p => ({ ...p, [slot]: url }));
     } catch (e) {
+      setPhotoURLs(p=>({...p,[slot]:previous}));
       console.error('Upload error', e);
       alert('Erreur upload photo. Réessaie ou passe à une photo plus légère.');
     }
@@ -231,7 +236,7 @@ export default function WeeklyCheckIn({ coachMode }) {
       // Filtrer les URLs non-Cloudinary (base64 preview, blob...)
       const safePhotoURLs = {};
       Object.entries(photoURLs).forEach(([k, v]) => {
-        if (v && v.startsWith('https://')) safePhotoURLs[k] = v;
+        if (isSavedPhoto(v)) safePhotoURLs[k] = v;
       });
       await setDoc(doc(db, 'clients', currentUser.uid, 'weeklyEntries', saveKey), {
         weekKey: saveKey,
@@ -347,11 +352,13 @@ export default function WeeklyCheckIn({ coachMode }) {
         {/* Photos */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📸 Photos de progression</div>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Visibles uniquement par ta coach. Upload automatique.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>{privatePhotosEnabled?'Photos facultatives, accessibles à toi et aux coachs rattachés à ton suivi.':'Photos facultatives pour suivre ta progression.'}</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             {PHOTO_SLOTS.map(slot => (
               <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <div
+                  role="button" tabIndex={0} aria-label={`Choisir la photo ${slot.label}`} aria-disabled={uploadingSlots.has(slot.key)}
+                  onKeyDown={e=>{if(e.target===e.currentTarget&&!uploadingSlots.has(slot.key)&&['Enter',' '].includes(e.key)){e.preventDefault();fileRefs[slot.key].current.click();}}}
                   onClick={() => !uploadingSlots.has(slot.key) && fileRefs[slot.key].current.click()}
                   style={{
                     width: '100%', aspectRatio: '3/4', borderRadius: 'var(--radius-sm)',
@@ -366,7 +373,7 @@ export default function WeeklyCheckIn({ coachMode }) {
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Upload...</div>
                     </div>
                   ) : photoURLs[slot.key] ? (
-                    <img src={photoURLs[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <ProgressPhoto src={photoURLs[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 28, color: 'var(--text-light)' }}>+</div>

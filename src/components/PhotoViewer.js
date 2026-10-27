@@ -1,5 +1,8 @@
 // src/components/PhotoViewer.js
 import React, { useState, useEffect } from 'react';
+import ProgressPhoto from './ProgressPhoto';
+import {readPhotoBlob} from '../utils/privatePhotos';
+import {auth} from '../firebase';
 
 const SLOTS = [
   { key: 'face', label: 'Face' },
@@ -10,8 +13,10 @@ const SLOTS = [
 export default function PhotoViewer({ photoURLs, initialSlot, onClose }) {
   const available = SLOTS.filter(s => photoURLs?.[s.key]);
   const [current, setCurrent] = useState(
-    available.findIndex(s => s.key === initialSlot) || 0
+    Math.max(0,available.findIndex(s => s.key === initialSlot))
   );
+  const [downloadError,setDownloadError]=useState('');
+  const [downloading,setDownloading]=useState(false);
 
   useEffect(() => {
     function handleKey(e) {
@@ -24,21 +29,24 @@ export default function PhotoViewer({ photoURLs, initialSlot, onClose }) {
   }, [available.length, onClose]);
 
   if (!available.length) return null;
-  const photo = available[current];
+  const photo = available[Math.min(current,available.length-1)];
 
   async function handleDownload() {
+    if(downloading)return;
+    const uid=auth.currentUser?.uid;
+    setDownloading(true);setDownloadError('');
     try {
-      const response = await fetch(photoURLs[photo.key]);
-      const blob = await response.blob();
+      const blob = await readPhotoBlob(photoURLs[photo.key]);
+      if(auth.currentUser?.uid!==uid)throw new Error('Le compte connecté a changé.');
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `photo_${photo.label.toLowerCase()}.jpg`;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
     } catch {
-      window.open(photoURLs[photo.key], '_blank');
-    }
+      setDownloadError('Le téléchargement n’a pas abouti. Vérifie tes accès et réessaie.');
+    }finally{setDownloading(false);}
   }
 
   return (
@@ -79,7 +87,7 @@ export default function PhotoViewer({ photoURLs, initialSlot, onClose }) {
 
       {/* Image */}
       <div onClick={e => e.stopPropagation()} style={{ maxHeight: '75vh', maxWidth: '90vw', position: 'relative' }}>
-        <img
+        <ProgressPhoto
           src={photoURLs[photo.key]}
           alt={photo.label}
           style={{ maxHeight: '75vh', maxWidth: '90vw', objectFit: 'contain', borderRadius: 8 }}
@@ -121,7 +129,8 @@ export default function PhotoViewer({ photoURLs, initialSlot, onClose }) {
           padding: '20px',
           background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)',
         }}>
-        <button onClick={handleDownload} style={{
+        {downloadError&&<p role="alert" style={{color:'white'}}>{downloadError}</p>}
+        <button disabled={downloading} onClick={handleDownload} style={{
           background: 'white', color: '#1A1A2E', border: 'none',
           borderRadius: 100, padding: '10px 24px',
           fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 14,

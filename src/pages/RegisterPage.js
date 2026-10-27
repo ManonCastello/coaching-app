@@ -5,6 +5,7 @@ import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import {useAuth} from '../contexts/AuthContext';
+import {privatePhotosEnabled} from '../utils/privatePhotos';
 import { calculateBMR, calculateTDEE, calculateCalorieTarget, calculateMacros, calculateAgeFromDOB, ACTIVITY_LEVELS, GOALS, WEEK_DAYS } from '../utils/calculations';
 
 const CLOUDINARY_CLOUD = 'dduaqnygn';
@@ -103,6 +104,7 @@ export default function RegisterPage() {
   }
 
   async function handlePhotoSelect(slot, file) {
+    if(privatePhotosEnabled)return;
     if (!file) return;
     const reader = new FileReader();
     reader.onload = e => setStartPhotoURLs(p => ({ ...p, [slot]: e.target.result }));
@@ -418,6 +420,7 @@ export default function RegisterPage() {
           </div>
 
           {/* Photos de départ */}
+          {privatePhotosEnabled?<div className="card"><h3>📸 Tes photos de départ</h3><p>Après avoir créé ton compte, tu pourras ajouter tes photos depuis ton profil. Elles sont facultatives et seront accessibles à toi et aux coachs rattachés à ton suivi.</p></div>:
           <div className="card">
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📸 Photos de départ</div>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Visibles uniquement par ta coach. Servent de référence de départ pour mesurer ta progression.</p>
@@ -454,7 +457,7 @@ export default function RegisterPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 

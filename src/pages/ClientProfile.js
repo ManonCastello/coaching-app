@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ProgressPhoto from '../components/ProgressPhoto';
+import {privatePhotosEnabled,uploadPrivatePhoto} from '../utils/privatePhotos';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { calculateBMR, calculateTDEE, calculateBMI, getBMICategory, calculateAgeFromDOB, WEEK_DAYS } from '../utils/calculations';
@@ -77,6 +79,7 @@ export default function ClientProfile() {
   }
 
   async function uploadStartPhoto(file, slot) {
+    if(privatePhotosEnabled)return uploadPrivatePhoto(file,{clientId:currentUser.uid,category:'initial'});
     const ln = (profile?.lastName || 'client').toLowerCase().replace(/\s/g, '_');
     const fn = (profile?.firstName || '').toLowerCase().replace(/\s/g, '_');
     const publicId = `fitlog/start/${fn}_${ln}_start_${slot}_${Date.now()}`;
@@ -92,14 +95,15 @@ export default function ClientProfile() {
 
   async function handleStartPhotoSelect(slot, file) {
     if (!file) return;
+    const previous=startPhotos[slot];
     const reader = new FileReader();
     reader.onload = e => setStartPhotos(p => ({ ...p, [slot]: e.target.result }));
-    reader.readAsDataURL(file);
+    if(!privatePhotosEnabled)reader.readAsDataURL(file);
     setUploadingSlot(slot);
     try {
       const url = await uploadStartPhoto(file, slot);
       setStartPhotos(p => ({ ...p, [slot]: url }));
-    } catch (e) { console.error(e); }
+    } catch (e) { setStartPhotos(p=>({...p,[slot]:previous}));alert(e.message||'La photo n’a pas été enregistrée. Réessaie.'); }
     setUploadingSlot(null);
   }
 
@@ -306,25 +310,25 @@ export default function ClientProfile() {
               )}
             </div>
             <button className="btn btn-secondary btn-sm" style={{ width: 'auto' }} onClick={() => setEditStartData(!editStartData)}>
-              {editStartData ? 'Annuler' : profile.startMeasurements ? 'Modifier' : '+ Ajouter'}
+              {editStartData ? 'Annuler' : profile.startMeasurements||Object.values(profile.startPhotos||{}).some(Boolean) ? 'Modifier' : '+ Ajouter'}
             </button>
           </div>
 
-          {!editStartData && profile.startMeasurements && (
+          {!editStartData && (profile.startMeasurements||Object.values(profile.startPhotos||{}).some(Boolean)) && (
             <div style={{ marginTop: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              {profile.startMeasurements&&<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                 {MEASURE_FIELDS.map(m => (
                   <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg)', borderRadius: 8 }}>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.emoji} {m.label}</span>
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{profile.startMeasurements[m.key] ? `${profile.startMeasurements[m.key]} cm` : '—'}</span>
                   </div>
                 ))}
-              </div>
+              </div>}
               {profile.startPhotos && (profile.startPhotos.face || profile.startPhotos.profile || profile.startPhotos.back) && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   {PHOTO_SLOTS.map(slot => profile.startPhotos[slot.key] && (
                     <div key={slot.key}>
-                      <img src={profile.startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8 }} />
+                      <ProgressPhoto src={profile.startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: 8 }} />
                       <p style={{ fontSize: 11, textAlign: 'center', color: 'var(--text-muted)', marginTop: 4 }}>{slot.label}</p>
                     </div>
                   ))}
@@ -352,7 +356,7 @@ export default function ClientProfile() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 {PHOTO_SLOTS.map(slot => (
                   <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()} style={{
+                    <div role="button" tabIndex={0} aria-label={`Choisir la photo ${slot.label}`} aria-disabled={!!uploadingSlot} onKeyDown={e=>{if(e.target===e.currentTarget&&!uploadingSlot&&['Enter',' '].includes(e.key)){e.preventDefault();fileRefs[slot.key].current.click();}}} onClick={() => !uploadingSlot && fileRefs[slot.key].current.click()} style={{
                       width: '100%', aspectRatio: '3/4', borderRadius: 'var(--radius-sm)',
                       border: `2px dashed ${startPhotos[slot.key] ? 'var(--primary)' : 'var(--border)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -361,7 +365,7 @@ export default function ClientProfile() {
                       {uploadingSlot === slot.key ? (
                         <div className="spinner" style={{ width: 24, height: 24 }} />
                       ) : startPhotos[slot.key] ? (
-                        <img src={startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <ProgressPhoto src={startPhotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: 24, color: 'var(--text-light)' }}>+</div>

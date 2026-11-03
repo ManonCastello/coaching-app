@@ -21,15 +21,50 @@ test('shows server detail and uncertain validation retries exactly the same oper
   expect(call.mock.calls[1][0]).toEqual(call.mock.calls[2][0]);expect(saved).toHaveBeenCalledTimes(1);
 });
 test('a stale confirmation cannot be resubmitted without another preview',async()=>{
-  const call=jest.fn().mockResolvedValueOnce({data}).mockRejectedValueOnce({code:'functions/aborted',message:'Le journal a changé'});
+  const call=jest.fn().mockResolvedValueOnce({data}).mockRejectedValueOnce({code:'functions/aborted',message:'Le journal a changé'}).mockResolvedValueOnce({data:{...data,confirmationToken:'a'.repeat(64)}});
   httpsCallable.mockReturnValue(call);
   await act(async()=>root.render(<DailyValidation clientId="pupil" day="2026-10-26" onClose={()=>{}} onSaved={()=>{}}/>));
   await act(async()=>container.querySelector('.btn-primary').click());
   expect(container.querySelector('.btn-primary').disabled).toBe(true);
   expect(container.textContent).toContain('Le journal a changé');
+  await act(async()=>[...container.querySelectorAll('button')].find(b=>b.textContent==='Recalculer l’aperçu').click());
+  expect(container.querySelector('.btn-primary').disabled).toBe(false);
+  expect(call.mock.calls[2][0].action).toBe('previewDaily');
 });
 test('intuitive mode never renders the numerical breakdown',async()=>{
   httpsCallable.mockReturnValue(jest.fn().mockResolvedValue({data:{...data,breakdown:{...data.breakdown,tracking:false}}}));
   await act(async()=>root.render(<DailyValidation clientId="pupil" day="2026-10-26" onClose={()=>{}} onSaved={()=>{}}/>));
   expect(container.textContent).not.toContain('430');expect(container.textContent).not.toContain('kcal');
+});
+test('coach uses dedicated preview and validation with a reason, retained on uncertain retry',async()=>{
+  const call=jest.fn().mockResolvedValueOnce({data}).mockRejectedValueOnce({code:'functions/unavailable',message:'Réponse interrompue'}).mockResolvedValueOnce({data});
+  httpsCallable.mockReturnValue(call);const saved=jest.fn();
+  await act(async()=>root.render(<DailyValidation coachMode clientId="pupil" day="2026-10-26" onClose={()=>{}} onSaved={saved}/>));
+  expect(call.mock.calls[0][0].action).toBe('previewCoachDaily');
+  expect(container.querySelector('.btn-primary').disabled).toBe(false);
+  await act(async()=>{
+    const input=container.querySelector('textarea');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'Journal contrôlé avec l’élève');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  expect(container.querySelector('.btn-primary').disabled).toBe(false);
+  await act(async()=>container.querySelector('.btn-primary').click());
+  expect(call.mock.calls[1][0]).toMatchObject({action:'validateCoachDaily',clientId:'pupil',reason:'Journal contrôlé avec l’élève'});
+  expect(container.querySelector('textarea').disabled).toBe(true);
+  await act(async()=>container.querySelector('.btn-primary').click());
+  expect(call.mock.calls[1][0]).toEqual(call.mock.calls[2][0]);expect(saved).toHaveBeenCalledTimes(1);
+});
+test.each(['','OK'])('coach can confirm with optional comment %p',async reason=>{
+  const call=jest.fn().mockResolvedValue({data});httpsCallable.mockReturnValue(call);const saved=jest.fn();
+  await act(async()=>root.render(<DailyValidation coachMode clientId="pupil" day="2026-10-26" onClose={()=>{}} onSaved={saved}/>));
+  expect(container.textContent).toContain('Commentaire (facultatif)');
+  if(reason)await act(async()=>{
+    const input=container.querySelector('textarea');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,reason);
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  expect(container.querySelector('.btn-primary').disabled).toBe(false);
+  await act(async()=>container.querySelector('.btn-primary').click());
+  expect(call.mock.calls[1][0]).toMatchObject({action:'validateCoachDaily',reason});
+  expect(saved).toHaveBeenCalledTimes(1);
 });

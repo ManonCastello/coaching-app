@@ -13,6 +13,7 @@ import { summarizeWeeklyDays } from '../utils/weeklyEntries';
 import useWeeklyEntries from '../hooks/useWeeklyEntries';
 import CoachAuditHistory from '../components/CoachAuditHistory';
 import AuditedCoachAction, {auditedMutationsEnabled} from '../components/AuditedCoachAction';
+import DailyValidation from '../components/DailyValidation';
 import {readValidatedEntry} from '../utils/validatedBalance';
 import ProgressPhoto from '../components/ProgressPhoto';
 import {privatePhotosEnabled,uploadPrivatePhoto} from '../utils/privatePhotos';
@@ -23,6 +24,7 @@ export default function CoachClientDetail() {
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [auditRequest, setAuditRequest] = useState(null);
+  const [validationDay,setValidationDay]=useState(null);
   const [entries, setEntries] = useState([]);
   const { entries: weeklyEntries, setEntries: setWeeklyEntries, error: weeklyError,
     loading: weeklyLoading, refreshing: weeklyRefreshing, source: weeklySource,
@@ -438,6 +440,7 @@ export default function CoachClientDetail() {
   return (
     <div className="app-shell">
       {auditRequest && <AuditedCoachAction command={auditRequest} onClose={() => setAuditRequest(null)} onSaved={() => window.location.reload()} />}
+      {validationDay&&<DailyValidation key={`${clientId}/${validationDay}`} coachMode clientId={clientId} day={validationDay} onClose={()=>setValidationDay(null)} onSaved={()=>window.location.reload()}/>}
       <div className="top-nav">
         <Link to="/coach" style={{ textDecoration: 'none', color: 'var(--text-muted)', fontSize: 22 }}>←</Link>
         <div className="top-nav-title" style={{ fontSize: 15 }}>{client.firstName} {(client.lastName || '').toUpperCase()}</div>
@@ -1011,10 +1014,10 @@ export default function CoachClientDetail() {
                     {e.weight && <span className="badge badge-primary">{e.weight} kg</span>}
                     {/* Bouton lock/unlock coach */}
                     <button
-                      disabled={auditedMutationsEnabled && !e.locked}
                       onClick={async () => {
                         if (auditedMutationsEnabled) {
-                          setAuditRequest({action: 'unlockDaily', clientId, day: e.date, expectedRevision: e.auditRevision || 0});
+                          if(e.locked)setAuditRequest({action: 'unlockDaily', clientId, day: e.date, expectedRevision: e.auditRevision || 0});
+                          else setValidationDay(e.date);
                           return;
                         }
                         const { doc: d, setDoc: sd, serverTimestamp: st, collection: col, query: q2, orderBy: ob, getDocs: gd, limit: lim } = await import('firebase/firestore');

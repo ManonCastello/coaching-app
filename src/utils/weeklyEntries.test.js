@@ -1,6 +1,16 @@
-import { normalizeWeeklyEntry, readWeeklyEntries, summarizeWeeklyDays, wasSubmittedToday } from './weeklyEntries';
+import { normalizeWeeklyEntry, readWeeklyEntries, summarizeWeeklyDays, summarizeWeeklySteps, wasSubmittedToday } from './weeklyEntries';
 
 const document = (id, data) => ({ id, data: () => data });
+
+test('step averages include estimated meals and incomplete food logs but exclude missing steps', () => {
+  expect(summarizeWeeklySteps([{steps:8000,calories:0},{steps:10000,estimatedMeals:true},{steps:0},
+    {steps:null},{steps:''},{steps:undefined},{steps:-1},{steps:'9000'},{steps:true}]))
+    .toEqual({count:4,total:27000,average:6750});
+});
+test('unknown activity remains unknown and an explicitly recorded zero remains zero', () => {
+  expect(summarizeWeeklySteps([{calories:2000}])).toEqual({count:0,total:null,average:null});
+  expect(summarizeWeeklySteps([{steps:0}])).toEqual({count:1,total:0,average:0});
+});
 
 test('keeps a submitted bilan visible without a period start', () => {
   const entry = normalizeWeeklyEntry(document('2026-10-11', { avgWeight: 77.6 }));

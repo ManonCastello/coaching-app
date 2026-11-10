@@ -9,7 +9,7 @@ import { fr } from 'date-fns/locale';
 import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { calculateBMR, calculateTDEE, calculateAgeFromDOB, FORMULES, WEEK_DAYS } from '../utils/calculations';
 import PhotoViewer from '../components/PhotoViewer';
-import { summarizeWeeklyDays } from '../utils/weeklyEntries';
+import { summarizeWeeklyDays, summarizeWeeklySteps } from '../utils/weeklyEntries';
 import useWeeklyEntries from '../hooks/useWeeklyEntries';
 import CoachAuditHistory from '../components/CoachAuditHistory';
 import AuditedCoachAction, {auditedMutationsEnabled} from '../components/AuditedCoachAction';
@@ -1167,6 +1167,7 @@ export default function CoachClientDetail() {
               const wDays = entries.filter(e => wStart && wEnd && e.date >= wStart && e.date <= wEnd)
                 .map(e => ({ ...e, label: format(new Date(e.date), 'EEE', { locale: fr }) }));
               const statsToShow = summarizeWeeklyDays(w.weekStats?.days || wDays);
+              const stepStats = summarizeWeeklySteps(wDays.length ? wDays : w.weekStats?.days);
               return (
               <div key={w.id} className="card">
                 {/* Header avec statut */}
@@ -1239,6 +1240,19 @@ export default function CoachClientDetail() {
                     </div>
                   </div>
                 )}
+
+                <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: 'var(--bg)', border: '1px solid var(--border-light)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>👟 Pas sur la période</div>
+                  {stepStats.count > 0 ? <>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginTop: 8 }}>
+                      <div><strong style={{ fontSize: 20 }}>{stepStats.average.toLocaleString('fr-FR')}</strong><span style={{ fontSize: 12 }}> pas / jour</span></div>
+                      <div><strong>{stepStats.total.toLocaleString('fr-FR')}</strong><span style={{ fontSize: 12 }}> pas au total</span></div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                      Moyenne sur {stepStats.count} jour{stepStats.count > 1 ? 's' : ''} renseigné{stepStats.count > 1 ? 's' : ''} · repas estimés inclus pour les pas.
+                    </div>
+                  </> : <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Nombre de pas non renseigné sur cette période.</div>}
+                </div>
 
                 {/* Graphique nutritionnel */}
                 {statsToShow?.days && (

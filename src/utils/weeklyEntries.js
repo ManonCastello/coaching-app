@@ -40,3 +40,14 @@ export function summarizeWeeklyDays(days) {
 export function wasSubmittedToday(entries, today) {
   return entries.some(entry => entry.bilanDate === today);
 }
+
+// Activity is independent from food completeness and meal estimates. Keep an
+// explicitly recorded zero, but never turn a missing value into zero steps.
+export function summarizeWeeklySteps(days) {
+  const values = (Array.isArray(days) ? days : []).map(day => day?.steps)
+    .filter(value => (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) &&
+      Number.isSafeInteger(Number(value)) && Number(value) >= 0).map(Number);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return { count: values.length, total: values.length ? total : null,
+    average: values.length ? Math.round(total / values.length) : null };
+}

@@ -134,7 +134,7 @@ export default function WeeklyCheckIn({ coachMode }) {
         if (!active) return;
         const entries = (snap?.docs || []).map(d => d.data()).sort((a, b) => a.date.localeCompare(b.date));
         if (entries.length > 0) {
-          const days = entries.map(e => ({ date: e.date, label: format(new Date(e.date), 'EEE', { locale: fr }), calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 }));
+          const days = entries.map(e => ({ date: e.date, label: format(new Date(e.date), 'EEE', { locale: fr }), steps: e.steps ?? null, calories: e.calories || 0, protein: e.protein || 0, carbs: e.carbs || 0, fat: e.fat || 0 }));
           setWeekStats(summarizeWeeklyDays(days));
         } else {
           setWeekStats(summarizeWeeklyDays(savedBilan?.weekStats?.days));
